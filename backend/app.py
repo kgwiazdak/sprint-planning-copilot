@@ -3,7 +3,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 from .schemas import ExtractionResult
-from .stt import transcribe_audio_if_needed
+from .stt import SUPPORTED_AUDIO_EXTENSIONS, transcribe_audio_if_needed
 from .extractor import Extractor
 from .storage import store_meeting_and_result
 from .mlflow_logging import log_extraction_run
@@ -13,7 +13,7 @@ app = FastAPI(title="AI Scrum Co-Pilot — MVP Extract API")
 @app.post("/extract", response_model=ExtractionResult)
 async def extract(file: UploadFile = File(...)):
     content = await get_content(file)
-    transcript = await get_transcript(content, file.filename .lower())
+    transcript = await get_transcript(content, file.filename.lower())
     result = await get_result(transcript)
     await store_and_log(file, result, transcript)
     return JSONResponse(content=result.dict())
@@ -46,8 +46,13 @@ async def get_content(file):
 async def get_transcript(content, name_lower):
     if name_lower.endswith((".txt", ".json")):
         transcript = content.decode("utf-8", errors="ignore")
-    elif name_lower.endswith((".mp3", ".wav", ".m4a", ".flac", ".ogg")):
-        transcript = transcribe_audio_if_needed(content, filename=name_lower)
+    elif name_lower.endswith(tuple(SUPPORTED_AUDIO_EXTENSIONS)):
+        try:
+            transcript = transcribe_audio_if_needed(content, filename=name_lower)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Transcription failed: {exc}") from exc
     else:
         raise HTTPException(status_code=400, detail="Unsupported file type")
     return transcript
