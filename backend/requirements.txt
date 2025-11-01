@@ -2,6 +2,7 @@ fastapi==0.115.2
 uvicorn[standard]==0.30.6
 pydantic==2.8.2
 python-multipart==0.0.9
+requests>=2.32.0
 
 # LLM stack (zgodne wersje)
 langchain==0.3.7

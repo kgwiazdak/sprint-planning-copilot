@@ -2,7 +2,10 @@ import json
 import logging
 import os
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict
+
+import requests
+from requests import RequestException
 
 from .schemas import ExtractionResult
 
@@ -10,16 +13,28 @@ logger = logging.getLogger(__name__)
 
 USE_MOCK = os.getenv("MOCK_LLM", "0") == "1"
 
+_DEFAULT_MODEL_CONFIG = {
+    "deepseek": {
+        "model": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+        "api_base": "http://deepseek:8000/v1",
+    },
+    "phi": {
+        "model": "microsoft/Phi-3.5-mini-instruct",
+        "api_base": "http://phi:8000/v1",
+    },
+}
+
 
 class Extractor:
     def __init__(self) -> None:
-        self.model_id = os.getenv("DEEPSEEK_MODEL", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B")
-        self.max_new_tokens = int(os.getenv("DEEPSEEK_MAX_NEW_TOKENS", "1024"))
-        self.temperature = float(os.getenv("DEEPSEEK_TEMPERATURE", "0.1"))
-        self.device = os.getenv("DEEPSEEK_DEVICE", "auto").lower()
-        self._tokenizer = None
-        self._model = None
-        self._torch = None
+        variant = os.getenv("LLM_MODEL_VARIANT", "deepseek").lower()
+        default_config = _DEFAULT_MODEL_CONFIG.get(variant, _DEFAULT_MODEL_CONFIG["deepseek"])
+        self.model_id = os.getenv("LLM_MODEL_ID", default_config["model"])
+        self.api_base = os.getenv("LLM_API_BASE", default_config["api_base"]).rstrip("/")
+        self.max_new_tokens = int(os.getenv("LLM_MAX_NEW_TOKENS", "1024"))
+        self.temperature = float(os.getenv("LLM_TEMPERATURE", "0.1"))
+        self.timeout = float(os.getenv("LLM_TIMEOUT", "120"))
+        self.api_key = os.getenv("LLM_API_KEY")
 
     def _mock_extract(self, transcript: str) -> Dict[str, Any]:
         lines = [l.strip() for l in transcript.splitlines() if l.strip()]
@@ -58,40 +73,6 @@ class Extractor:
             ]
         return {"tasks": tasks}
 
-    def _ensure_model(self) -> bool:
-        if self._tokenizer is not None and self._model is not None and self._torch is not None:
-            return True
-        try:
-            from transformers import AutoModelForCausalLM, AutoTokenizer
-            import torch
-        except ImportError:
-            logger.warning("transformers not available, falling back to mock extractor")
-            return False
-
-        logger.info("Loading DeepSeek model %s", self.model_id)
-        tokenizer = AutoTokenizer.from_pretrained(self.model_id, trust_remote_code=True)
-
-        device_map: Optional[Dict[str, str]] = None
-        torch_dtype = torch.float16
-        if self.device == "cpu":
-            device_map = {"": "cpu"}
-            torch_dtype = torch.float32
-        elif self.device != "auto":
-            device_map = {"": self.device}
-
-        model = AutoModelForCausalLM.from_pretrained(
-            self.model_id,
-            trust_remote_code=True,
-            device_map=device_map or "auto",
-            torch_dtype=torch_dtype,
-        )
-        model.eval()
-
-        self._tokenizer = tokenizer
-        self._model = model
-        self._torch = torch
-        return True
-
     def _extract_json_block(self, text: str) -> str:
         text = text.strip()
         if text.startswith("```"):
@@ -111,17 +92,12 @@ class Extractor:
         candidate = self._extract_json_block(raw)
         return json.loads(candidate)
 
-    def _deepseek_generate(self, transcript: str) -> Dict[str, Any]:
-        if not self._ensure_model():
-            return self._mock_extract(transcript)
-
-        assert self._tokenizer is not None and self._model is not None and self._torch is not None
-        torch = self._torch
-
+    def _llm_generate(self, transcript: str) -> Dict[str, Any]:
         system_prompt = (
             "You are an Agile Product Owner. Extract Jira-ready tasks from meeting transcripts. "
             "Return STRICT JSON following the schema:\n"
-            "{\n  \"tasks\": [\n    {\n      \"summary\": str, \"description\": str, \"issue_type\": one of [\"Story\",\"Task\",\"Bug\",\"Spike\"], "
+            "{\n  \"tasks\": [\n    {\n      \"summary\": str, \"description\": str, \"issue_type\": one of [\"Story\",\"Task\","
+            "\"Bug\",\"Spike\"], "
             "\"assignee_name\": str|null, \"priority\": one of [\"Low\",\"Medium\",\"High\"], \"story_points\": int|null, \"labels\": [str], \"links\": [str], \"quotes\": [str]\n    }\n  ]\n}"
             "\nIf no assignee, set null. Use quotes to include short verbatim snippets from the transcript that justify each task."
         )
@@ -131,44 +107,56 @@ class Extractor:
             "---\nReturn only valid JSON, no additional commentary."
         )
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ]
+        payload = {
+            "model": self.model_id,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": self.temperature,
+            "max_tokens": self.max_new_tokens,
+        }
 
-        prompt_text = self._tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        inputs = self._tokenizer(
-            prompt_text,
-            return_tensors="pt",
-            padding=False,
-            add_special_tokens=False,
-        )
-        model_device = next(self._model.parameters()).device
-        inputs = {k: v.to(model_device) for k, v in inputs.items()}
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
-        with torch.no_grad():
-            output = self._model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                temperature=self.temperature,
-                do_sample=False,
-                eos_token_id=self._tokenizer.eos_token_id,
+        try:
+            response = requests.post(
+                f"{self.api_base}/chat/completions",
+                json=payload,
+                headers=headers,
+                timeout=self.timeout,
             )
+            response.raise_for_status()
+        except RequestException as exc:
+            logger.warning("LLM HTTP request failed: %s", exc)
+            return self._mock_extract(transcript)
 
-        generated_tokens = output[0, inputs["input_ids"].shape[-1] :]
-        response_text = self._tokenizer.decode(
-            generated_tokens, skip_special_tokens=True
-        ).strip()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            logger.warning("Failed to decode LLM JSON payload: %s", exc)
+            logger.debug("Raw LLM response text: %s", response.text)
+            return self._mock_extract(transcript)
+
+        choices = data.get("choices") or []
+        if not choices:
+            logger.warning("LLM response missing choices: %s", data)
+            return self._mock_extract(transcript)
+
+        response_text = choices[0].get("message", {}).get("content", "").strip()
+        if not response_text:
+            logger.warning("LLM returned empty content: %s", data)
+            return self._mock_extract(transcript)
 
         try:
             return self._parse_json_response(response_text)
         except (json.JSONDecodeError, ValueError) as exc:
-            logger.warning("Failed to parse DeepSeek response as JSON: %s", exc)
-            logger.debug("DeepSeek raw response: %s", response_text)
+            logger.warning("Failed to parse LLM response as JSON: %s", exc)
+            logger.debug("LLM raw response: %s", response_text)
             return self._mock_extract(transcript)
 
     def extract_tasks_llm(self, transcript: str) -> ExtractionResult:
-        data = self._mock_extract(transcript) if USE_MOCK else self._deepseek_generate(transcript)
+        data = self._mock_extract(transcript) if USE_MOCK else self._llm_generate(transcript)
         return ExtractionResult(**data)

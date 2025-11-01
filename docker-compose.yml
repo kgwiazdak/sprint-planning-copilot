@@ -12,4 +12,39 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - MOCK_LLM=1
+      - MOCK_LLM=0
+      - LLM_MODEL_VARIANT=deepseek
+      - LLM_API_BASE=http://deepseek:8000/v1
+    depends_on:
+      - deepseek
+
+  deepseek:
+    image: vllm/vllm-openai:latest
+    command: >-
+      python -m vllm.entrypoints.openai.api_server
+      --model deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+      --served-model-name deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+      --trust-remote-code
+    environment:
+      - VLLM_WORKER_MULTIPROCESSING=0
+    ports:
+      - "8001:8000"
+    volumes:
+      - deepseek-cache:/root/.cache/huggingface
+
+  phi:
+    image: vllm/vllm-openai:latest
+    command: >-
+      python -m vllm.entrypoints.openai.api_server
+      --model microsoft/Phi-3.5-mini-instruct
+      --served-model-name microsoft/Phi-3.5-mini-instruct
+    environment:
+      - VLLM_WORKER_MULTIPROCESSING=0
+    ports:
+      - "8002:8000"
+    volumes:
+      - phi-cache:/root/.cache/huggingface
+
+volumes:
+  deepseek-cache:
+  phi-cache:
