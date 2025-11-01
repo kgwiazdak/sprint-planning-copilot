@@ -1,0 +1,12 @@
+services:
+  api:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./backend:/app/backend
+      - ./samples:/app/samples
+    command: bash -lc "pip install -r backend/requirements.txt && uvicorn backend.app:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    environment:
+      - MOCK_LLM=1

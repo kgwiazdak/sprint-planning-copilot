@@ -1,0 +1,10 @@
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+pydantic==2.8.2
+python-multipart==0.0.9
+# Optional (enable in F2)
+# langchain==0.2.16
+# langchain-openai==0.2.3
+# openai==1.51.0
+# azure-cognitiveservices-speech==1.38.0
+# mlflow==2.15.1

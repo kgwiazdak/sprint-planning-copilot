@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "summary": "Add validation to login form (FE)",
+      "description": "Auto-extracted from transcript line 3.\n\nQuote: \"- Add validation to login form (FE)\"",
+      "issue_type": "Task",
+      "assignee_name": null,
+      "priority": "Medium",
+      "story_points": null,
+      "labels": [
+        "meeting-generated"
+      ],
+      "links": [],
+      "quotes": [
+        "- Add validation to login form (FE)"
+      ]
+    },
+    {
+      "summary": "Implement password reset email flow",
+      "description": "Auto-extracted from transcript line 4.\n\nQuote: \"* Implement password reset email flow\"",
+      "issue_type": "Task",
+      "assignee_name": null,
+      "priority": "Medium",
+      "story_points": null,
+      "labels": [
+        "meeting-generated"
+      ],
+      "links": [],
+      "quotes": [
+        "* Implement password reset email flow"
+      ]
+    },
+    {
+      "summary": "Create database index on users.email for faster lookup",
+      "description": "Auto-extracted from transcript line 5.\n\nQuote: \"TODO: Create database index on users.email for faster lookup\"",
+      "issue_type": "Task",
+      "assignee_name": null,
+      "priority": "Medium",
+      "story_points": null,
+      "labels": [
+        "meeting-generated"
+      ],
+      "links": [],
+      "quotes": [
+        "TODO: Create database index on users.email for faster lookup"
+      ]
+    },
+    {
+      "summary": "Bug: Fix 500 on /api/orders when cart is empty",
+      "description": "Auto-extracted from transcript line 6.\n\nQuote: \"ACTION: Bug: Fix 500 on /api/orders when cart is empty\"",
+      "issue_type": "Bug",
+      "assignee_name": null,
+      "priority": "Medium",
+      "story_points": null,
+      "labels": [
+        "meeting-generated",
+        "ai-generated",
+        "sprint-planning",
+        "bug"
+      ],
+      "links": [],
+      "quotes": [
+        "ACTION: Bug: Fix 500 on /api/orders when cart is empty"
+      ]
+    }
+  ]
+}

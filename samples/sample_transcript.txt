@@ -1,0 +1,9 @@
+Sprint Planning — 2025-10-15
+Uczestnicy: Kuba, Ola, Marek
+
+- Add validation to login form (FE)
+* Implement password reset email flow
+TODO: Create database index on users.email for faster lookup
+ACTION: Bug: Fix 500 on /api/orders when cart is empty
+Discussion: We might need a spike for payment provider research (Stripe vs Adyen).
+Notes: Story points to be assigned during refinement.
