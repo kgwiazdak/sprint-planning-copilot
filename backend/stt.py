@@ -4,22 +4,11 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import Dict, Tuple
+from typing import Tuple
 
 import azure.cognitiveservices.speech as speechsdk
 
-SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = (
-    ".flac",
-    ".mp3",
-    ".ogg",
-    ".wav",
-)
-
-_COMPRESSED_FORMATS: Dict[str, speechsdk.audio.AudioStreamContainerFormat] = {
-    ".flac": speechsdk.audio.AudioStreamContainerFormat.FLAC,
-    ".mp3": speechsdk.audio.AudioStreamContainerFormat.MP3,
-    ".ogg": speechsdk.audio.AudioStreamContainerFormat.OGG_OPUS,
-}
+SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = (".wav",)
 
 
 class SpeechConfigurationError(RuntimeError):
@@ -54,38 +43,30 @@ def _speech_config() -> speechsdk.SpeechConfig:
 def _audio_config_from_bytes(content: bytes, extension: str) -> speechsdk.audio.AudioConfig:
     """Create an audio config for Azure Speech from in-memory audio content."""
 
-    if extension == ".wav":
-        import io
-        import wave
+    import io
+    import wave
 
-        try:
-            with wave.open(io.BytesIO(content)) as wav_reader:
-                frames = wav_reader.readframes(wav_reader.getnframes())
-                sample_rate = wav_reader.getframerate()
-                bits_per_sample = wav_reader.getsampwidth() * 8
-                channels = wav_reader.getnchannels()
-        except wave.Error as exc:  # pragma: no cover - depends on input data
-            raise ValueError("Unable to read WAV audio data") from exc
-
-        stream_format = speechsdk.audio.AudioStreamFormat(
-            sample_rate,
-            bits_per_sample,
-            channels,
+    if extension != ".wav":
+        raise ValueError(
+            f"Unsupported audio format: {extension}. Only uncompressed WAV is supported"
         )
-        stream = speechsdk.audio.PushAudioInputStream(stream_format=stream_format)
-        stream.write(frames)
-        stream.close()
-        return speechsdk.audio.AudioConfig(stream=stream)
 
-    container_format = _COMPRESSED_FORMATS.get(extension)
-    if not container_format:
-        raise ValueError(f"Unsupported audio format: {extension}")
+    try:
+        with wave.open(io.BytesIO(content)) as wav_reader:
+            frames = wav_reader.readframes(wav_reader.getnframes())
+            sample_rate = wav_reader.getframerate()
+            bits_per_sample = wav_reader.getsampwidth() * 8
+            channels = wav_reader.getnchannels()
+    except wave.Error as exc:  # pragma: no cover - depends on input data
+        raise ValueError("Unable to read WAV audio data") from exc
 
     stream_format = speechsdk.audio.AudioStreamFormat(
-        compressed_stream_format=container_format
+        sample_rate,
+        bits_per_sample,
+        channels,
     )
     stream = speechsdk.audio.PushAudioInputStream(stream_format=stream_format)
-    stream.write(content)
+    stream.write(frames)
     stream.close()
     return speechsdk.audio.AudioConfig(stream=stream)
 
