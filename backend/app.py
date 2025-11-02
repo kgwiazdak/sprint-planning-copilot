@@ -7,7 +7,7 @@ from .stt import SUPPORTED_AUDIO_EXTENSIONS, transcribe_audio_if_needed
 from .extractor import Extractor
 from .storage import store_meeting_and_result
 from .mlflow_logging import log_extraction_run
-
+from backend.logger import logger
 app = FastAPI(title="AI Scrum Co-Pilot — MVP Extract API")
 
 @app.post("/extract", response_model=ExtractionResult)
@@ -49,6 +49,7 @@ async def get_transcript(content, name_lower):
     elif name_lower.endswith(tuple(SUPPORTED_AUDIO_EXTENSIONS)):
         try:
             transcript = transcribe_audio_if_needed(content, filename=name_lower)
+            logger.info(transcript)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
