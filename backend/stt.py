@@ -13,14 +13,12 @@ SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = (
     ".mp3",
     ".ogg",
     ".wav",
-    ".webm",
 )
 
 _COMPRESSED_FORMATS: Dict[str, speechsdk.audio.AudioStreamContainerFormat] = {
     ".flac": speechsdk.audio.AudioStreamContainerFormat.FLAC,
     ".mp3": speechsdk.audio.AudioStreamContainerFormat.MP3,
     ".ogg": speechsdk.audio.AudioStreamContainerFormat.OGG_OPUS,
-    ".webm": speechsdk.audio.AudioStreamContainerFormat.WEBM_OPUS,
 }
 
 
