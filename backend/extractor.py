@@ -1,59 +1,38 @@
 import json
 import logging
 import os
-import re
-from typing import Dict, Any
+from typing import Any, Dict
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
 from .schemas import ExtractionResult
 
-USE_MOCK = os.getenv("MOCK_LLM", "1") == "1"
+logger = logging.getLogger(__name__)
+
 
 class Extractor:
-    def _mock_extract(self, transcript: str) -> Dict[str, Any]:
-        lines = [l.strip() for l in transcript.splitlines() if l.strip()]
-        tasks = []
-        for i, line in enumerate(lines):
-            if re.match(r'^(-|\*|TODO|ACTION)', line, re.I):
-                summary = re.sub(r'^(-|\*|TODO:?|ACTION:?)\s*', '', line, flags=re.I)[:300]
-                if not summary:
-                    summary = f"Task from meeting line {i + 1}"
-                tasks.append({
-                    "summary": summary,
-                    "description": f"Auto-extracted from transcript line {i + 1}.\n\nQuote: \"{line}\"",
-                    "issue_type": "Task",
-                    "assignee_name": None,
-                    "priority": "Medium",
-                    "story_points": None,
-                    "labels": ["meeting-generated"],
-                    "links": [],
-                    "quotes": [line],
-                })
-        if not tasks:
-            tasks = [{
-                "summary": "Review meeting outcomes and create Jira tasks",
-                "description": "No bullet-like items found. Review transcript and split into actionable tasks.",
-                "issue_type": "Task",
-                "assignee_name": None,
-                "priority": "Medium",
-                "story_points": None,
-                "labels": ["meeting-generated"],
-                "links": [],
-                "quotes": [],
-            }]
-        return {"tasks": tasks}
-
-
     def _llm_chain(self, transcript: str) -> Dict[str, Any]:
-        try:
-            from langchain_core.prompts import ChatPromptTemplate
-            from langchain_openai import AzureChatOpenAI, ChatOpenAI
-        except Exception:
-            return _mock_extract(transcript)
         provider = os.getenv("LLM_PROVIDER", "azure").lower()
+
         if provider == "azure":
+            api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+            azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
+            azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+
+            if not azure_deployment:
+                raise RuntimeError(
+                    "AZURE_OPENAI_DEPLOYMENT environment variable must be set to use Azure OpenAI."
+                )
+            if not azure_endpoint:
+                raise RuntimeError(
+                    "AZURE_OPENAI_ENDPOINT environment variable must be set to use Azure OpenAI."
+                )
+
             llm = AzureChatOpenAI(
-                api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
-                azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"),
+                api_version=api_version,
+                azure_deployment=azure_deployment,
+                azure_endpoint=azure_endpoint,
                 temperature=0.1,
             )
         else:
@@ -75,7 +54,8 @@ class Extractor:
         resp = chain.invoke({"transcript": transcript}).content
         try:
             data = json.loads(resp)
-        except Exception:
+        except Exception as exc:
+            logger.warning("LLM returned invalid JSON, attempting automatic repair", exc_info=exc)
             # Attempt automatic repair by asking the model to return only valid JSON
             fix_messages = ChatPromptTemplate.from_messages([
                 ("system", "You repair JSON. Return valid JSON only, nothing else."),
@@ -87,5 +67,5 @@ class Extractor:
 
 
     def extract_tasks_llm(self, transcript: str) -> ExtractionResult:
-        data = self._mock_extract(transcript) if USE_MOCK else self._llm_chain(transcript)
+        data = self._llm_chain(transcript)
         return ExtractionResult(**data)
