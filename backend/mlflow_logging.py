@@ -1,4 +1,15 @@
 import json
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,  # poziom dla roota
+    format="%(asctime)s %(levelname)s %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],  # do stdout -> docker logs
+)
+
+logger = logging.getLogger(__name__)
+
 def log_extraction_run(meeting_id: str, run_id: str, transcript: str, result):
     try:
         import mlflow

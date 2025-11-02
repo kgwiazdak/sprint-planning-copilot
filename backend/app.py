@@ -1,14 +1,15 @@
-import os
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
-from .schemas import ExtractionResult
-from .stt import SUPPORTED_AUDIO_EXTENSIONS, transcribe_audio_if_needed
+
+from backend.mlflow_logging import logger
 from .extractor import Extractor
-from .storage import store_meeting_and_result
 from .mlflow_logging import log_extraction_run
-from backend.logger import logger
+from backend.db.schemas import ExtractionResult
+from backend.db.storage import store_meeting_and_result
+from .stt import SUPPORTED_AUDIO_EXTENSIONS, transcribe_audio_if_needed
+
 app = FastAPI(title="AI Scrum Co-Pilot — MVP Extract API")
+
 
 @app.post("/extract", response_model=ExtractionResult)
 async def extract(file: UploadFile = File(...)):

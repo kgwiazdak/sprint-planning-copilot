@@ -1,34 +1,10 @@
 services:
   api:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./backend:/app/backend
-      - ./samples:/app/samples
-    environment:
-      - MOCK_LLM=1
-      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-      - TMPDIR=/tmp
-    command:
-      - bash
-      - -lc
-      - |
-        set -euo pipefail
-        apt-get update
-        
-        # twarde zależności Speech SDK na Debian/Ubuntu
-        apt-get install -y --no-install-recommends libasound2 ca-certificates openssl
-        update-ca-certificates
-        rm -rf /var/lib/apt/lists/*
-        python -m pip install --upgrade pip
-        
-        # UWAGA: najpierw zainstaluj wymagania projektu...
-        pip install -r backend/requirements.txt
-        
-        # ...a POTEM wymuś właściwą wersję SDK (żeby requirements jej nie nadpisał)
-        pip install --upgrade "azure-cognitiveservices-speech>=1.38,<2"
-        uvicorn backend.app:app --host 0.0.0.0 --port 8000
+    build: .
     ports:
       - "8000:8000"
     env_file:
       - .env
+    volumes:
+      - ./backend:/app/backend
+      - ./samples:/app/samples

@@ -6,13 +6,14 @@ from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 
-from .schemas import ExtractionResult
+from backend.db.schemas import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
 
 class Extractor:
-    def _llm_chain(self, transcript: str) -> Dict[str, Any]:
+    @staticmethod
+    def _llm_chain(transcript: str) -> Dict[str, Any]:
         provider = os.getenv("LLM_PROVIDER", "azure").lower()
 
         if provider == "azure":
@@ -54,7 +55,6 @@ class Extractor:
             data = json.loads(resp)
         except Exception as exc:
             logger.warning("LLM returned invalid JSON, attempting automatic repair", exc_info=exc)
-            # Attempt automatic repair by asking the model to return only valid JSON
             repair_messages = [
                 SystemMessage(content="You repair JSON. Return valid JSON only, nothing else."),
                 HumanMessage(
@@ -68,7 +68,6 @@ class Extractor:
             resp2 = llm.invoke(repair_messages).content
             data = json.loads(resp2)
         return data
-
 
     def extract_tasks_llm(self, transcript: str) -> ExtractionResult:
         data = self._llm_chain(transcript)

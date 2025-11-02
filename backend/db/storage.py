@@ -1,6 +1,12 @@
-import os, sqlite3, json, uuid, datetime, pathlib
+import datetime
+import json
+import os
+import pathlib
+import sqlite3
+import uuid
 
 DB_URL = os.getenv("DB_URL", "sqlite:///./app.db")
+
 
 def _ensure_db():
     if DB_URL.startswith("sqlite"):
@@ -19,6 +25,7 @@ def _ensure_db():
         )""")
         conn.commit()
     return conn
+
 
 def store_meeting_and_result(filename: str, transcript: str, result_model):
     conn = _ensure_db()

@@ -1,5 +1,7 @@
 from typing import List, Optional
+
 from pydantic import BaseModel, Field, conint
+
 
 class Task(BaseModel):
     summary: str = Field(..., min_length=3, max_length=300)
@@ -11,6 +13,7 @@ class Task(BaseModel):
     labels: Optional[list[str]] = Field(default_factory=list)
     links: Optional[list[str]] = Field(default_factory=list)
     quotes: Optional[list[str]] = Field(default_factory=list)
+
 
 class ExtractionResult(BaseModel):
     tasks: List[Task]
