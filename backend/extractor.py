@@ -1,24 +1,24 @@
 import json
 import logging
 import os
-from typing import Any, Dict
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
+from pydantic import ValidationError
 
-from backend.db.schemas import ExtractionResult
+from backend.schemas import ExtractionResult
 
 logger = logging.getLogger(__name__)
 
 
 class Extractor:
     @staticmethod
-    def _llm_chain(transcript: str) -> Dict[str, Any]:
+    def _llm_chain(transcript: str) -> ExtractionResult:
         provider = os.getenv("LLM_PROVIDER", "azure").lower()
 
         if provider == "azure":
             api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
-            azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT", )
+            azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT")
             azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
 
             if not azure_deployment:
@@ -50,25 +50,38 @@ class Extractor:
         human = f"Transcript:\n{transcript}\n---\nReturn only JSON, no prose."
         messages = [SystemMessage(content=system), HumanMessage(content=human)]
 
-        resp = llm.invoke(messages).content
+        raw_response = llm.invoke(messages).content
+        return Extractor._parse_or_repair_response(llm, raw_response)
+
+    @staticmethod
+    def _parse_or_repair_response(llm, payload: str) -> ExtractionResult:
         try:
-            data = json.loads(resp)
-        except Exception as exc:
-            logger.warning("LLM returned invalid JSON, attempting automatic repair", exc_info=exc)
+            data = json.loads(payload)
+            return ExtractionResult.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            logger.warning("LLM payload failed validation. Attempting repair.", exc_info=exc)
             repair_messages = [
-                SystemMessage(content="You repair JSON. Return valid JSON only, nothing else."),
+                SystemMessage(
+                    content=(
+                        "You repair JSON to satisfy a strict Pydantic schema. "
+                        "Return valid JSON only, no prose."
+                    )
+                ),
                 HumanMessage(
                     content=(
-                        "Repair this into valid JSON matching the schema:```"
-                        f"{resp}"
+                        "Original completion:\n```"
+                        f"{payload}"
                         "```"
+                        "\nValidation error:\n```"
+                        f"{exc}"
+                        "```"
+                        "\nReturn JSON matching the schema that passes validation."
                     )
                 ),
             ]
-            resp2 = llm.invoke(repair_messages).content
-            data = json.loads(resp2)
-        return data
+            repaired = llm.invoke(repair_messages).content
+            data = json.loads(repaired)
+            return ExtractionResult.model_validate(data)
 
     def extract_tasks_llm(self, transcript: str) -> ExtractionResult:
-        data = self._llm_chain(transcript)
-        return ExtractionResult(**data)
+        return self._llm_chain(transcript)

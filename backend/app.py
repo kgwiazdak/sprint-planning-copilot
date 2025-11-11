@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from backend.mlflow_logging import logger
 from .extractor import Extractor
 from .mlflow_logging import log_extraction_run
-from backend.db.schemas import ExtractionResult
+from backend.schemas import ExtractionResult
 from backend.db.storage import store_meeting_and_result
 from .stt import SUPPORTED_AUDIO_EXTENSIONS, transcribe_audio_if_needed
 
