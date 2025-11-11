@@ -4,7 +4,7 @@ ENV PIP_NO_CACHE_DIR=1 \
     PYTHONUNBUFFERED=1
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libasound2 ca-certificates \
+ && apt-get install -y --no-install-recommends libasound2 ca-certificates ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -14,7 +14,7 @@ RUN python -m pip install --upgrade pip \
  && pip install -r requirements.txt
 
 COPY backend backend
-COPY samples samples
+COPY data data
 
 EXPOSE 8000
 CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
+import subprocess
 import threading
 import wave
 from functools import lru_cache
@@ -11,12 +13,12 @@ from typing import List, Tuple
 
 import azure.cognitiveservices.speech as speechsdk
 
-SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = (".wav",)
+SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = (".wav", ".mp3")
 
 
 class Transcriber:
     def __init__(self) -> None:
-        self.SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = (".wav",)
+        self.SUPPORTED_AUDIO_EXTENSIONS: Tuple[str, ...] = SUPPORTED_AUDIO_EXTENSIONS
 
     @lru_cache(maxsize=1)
     def _speech_config(self) -> speechsdk.SpeechConfig:
@@ -36,10 +38,7 @@ class Transcriber:
     def _audio_config_from_bytes(content: bytes, extension: str) -> speechsdk.audio.AudioConfig:
         """Create an audio config for Azure Speech from in-memory audio content."""
 
-        if extension != ".wav":
-            raise ValueError(
-                f"Unsupported audio format: {extension}. Only uncompressed WAV is supported"
-            )
+        content = Transcriber._ensure_wav_content(content, extension)
 
         try:
             with wave.open(io.BytesIO(content)) as wav_reader:
@@ -59,6 +58,39 @@ class Transcriber:
         stream.write(frames)
         stream.close()
         return speechsdk.audio.AudioConfig(stream=stream)
+
+    @staticmethod
+    def _ensure_wav_content(content: bytes, extension: str) -> bytes:
+        """Return WAV bytes, converting from other supported formats if needed."""
+
+        if extension == ".wav":
+            return content
+        if extension != ".mp3":
+            raise ValueError(
+                f"Unsupported audio format: {extension}. Only WAV or MP3 are supported"
+            )
+        if shutil.which("ffmpeg") is None:
+            raise ValueError("FFmpeg is required to handle MP3 audio but was not found in PATH")
+
+        process = subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                "pipe:0",
+                "-f",
+                "wav",
+                "-acodec",
+                "pcm_s16le",
+                "pipe:1",
+            ],
+            input=content,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if process.returncode != 0:
+            error_details = process.stderr.decode("utf-8", errors="ignore").strip()
+            raise ValueError(f"Failed to decode MP3 audio via FFmpeg: {error_details}")
+        return process.stdout
 
     def transcribe_content(self, content: bytes, extension: str) -> str:
         config = self._speech_config()

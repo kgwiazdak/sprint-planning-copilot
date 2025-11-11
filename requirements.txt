@@ -8,3 +8,5 @@ langchain==0.3.7
 langchain-openai==0.2.3
 openai>=1.52.0,<2.0.0
 azure-cognitiveservices-speech>=1.38,<2
+python-dotenv>=1.0,<2
+elevenlabs==2.22.1
