@@ -4,6 +4,7 @@ import os
 import pathlib
 import sqlite3
 import uuid
+from typing import Optional
 
 DB_URL = os.getenv("DB_URL", "sqlite:///./app.db")
 
@@ -27,10 +28,10 @@ def _ensure_db():
     return conn
 
 
-def store_meeting_and_result(filename: str, transcript: str, result_model):
+def store_meeting_and_result(filename: str, transcript: str, result_model, meeting_id: Optional[str] = None):
     conn = _ensure_db()
     cur = conn.cursor()
-    meeting_id = str(uuid.uuid4())
+    meeting_id = meeting_id or str(uuid.uuid4())
     now = datetime.datetime.utcnow().isoformat()
     cur.execute("INSERT INTO meetings(id, title, transcript, created_at) VALUES(?,?,?,?)",
                 (meeting_id, filename, transcript, now))

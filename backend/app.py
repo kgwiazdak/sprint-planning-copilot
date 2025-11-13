@@ -1,7 +1,10 @@
+import uuid
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.mlflow_logging import logger
+from backend.services import BlobStorageService, BlobStorageConfigError, BlobStorageUploadError
 from .extractor import Extractor
 from .mlflow_logging import log_extraction_run
 from backend.schemas import ExtractionResult
@@ -10,19 +13,23 @@ from .stt import SUPPORTED_AUDIO_EXTENSIONS, transcribe_audio_if_needed
 
 app = FastAPI(title="AI Scrum Co-Pilot — MVP Extract API")
 
+_blob_storage_service: BlobStorageService | None = None
+
 
 @app.post("/extract", response_model=ExtractionResult)
 async def extract(file: UploadFile = File(...)):
+    meeting_id = str(uuid.uuid4())
     content = await get_content(file)
+    await save_original_file(meeting_id, file, content)
     transcript = await get_transcript(content, file.filename.lower())
     result = await get_result(transcript)
-    await store_and_log(file, result, transcript)
+    await store_and_log(file, result, transcript, meeting_id)
     return JSONResponse(content=result.dict())
 
 
-async def store_and_log(file, result, transcript):
+async def store_and_log(file, result, transcript, meeting_id):
     try:
-        meeting_id, run_id = store_meeting_and_result(file.filename, transcript, result)
+        meeting_id, run_id = store_meeting_and_result(file.filename, transcript, result, meeting_id=meeting_id)
         log_extraction_run(meeting_id=meeting_id, run_id=run_id, transcript=transcript, result=result)
     except Exception:
         pass
@@ -42,6 +49,30 @@ async def get_content(file):
     if not content:
         raise HTTPException(status_code=400, detail="Empty file")
     return content
+
+
+async def save_original_file(meeting_id: str, file: UploadFile, content: bytes) -> None:
+    try:
+        blob_service = get_blob_storage_service()
+    except BlobStorageConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    try:
+        await blob_service.save_file(
+            meeting_id=meeting_id,
+            original_filename=file.filename,
+            content=content,
+            content_type=file.content_type,
+        )
+    except BlobStorageUploadError as exc:
+        raise HTTPException(status_code=500, detail="Failed to persist uploaded file") from exc
+
+
+def get_blob_storage_service() -> BlobStorageService:
+    global _blob_storage_service
+    if _blob_storage_service is None:
+        _blob_storage_service = BlobStorageService.from_env()
+    return _blob_storage_service
 
 
 async def get_transcript(content, name_lower):
