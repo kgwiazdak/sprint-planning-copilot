@@ -11,7 +11,7 @@ from backend.schemas import ExtractionResult
 logger = logging.getLogger(__name__)
 
 
-class Extractor:
+class LLMExtractor:
     @staticmethod
     def _llm_chain(transcript: str) -> ExtractionResult:
         provider = os.getenv("LLM_PROVIDER", "azure").lower()
@@ -85,3 +85,10 @@ class Extractor:
 
     def extract_tasks_llm(self, transcript: str) -> ExtractionResult:
         return self._llm_chain(transcript)
+
+    def extract(self, transcript: str) -> ExtractionResult:
+        return self._llm_chain(transcript)
+
+
+# Backwards compatibility for older imports
+Extractor = LLMExtractor

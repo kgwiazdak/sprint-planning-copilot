@@ -1,4 +1,8 @@
-from .blob_storage import BlobStorageService, BlobStorageConfigError, BlobStorageUploadError
+from backend.infrastructure.storage.blob import (
+    BlobStorageConfigError,
+    BlobStorageService,
+    BlobStorageUploadError,
+)
 
 __all__ = [
     "BlobStorageService",

@@ -15,9 +15,26 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, MutableMapping, Sequence
 
-import mlflow
-from mlflow.exceptions import MlflowException
-from mlflow.tracking import MlflowClient
+try:  # pragma: no cover - optional dependency guard
+    import mlflow
+    from mlflow.exceptions import MlflowException
+    from mlflow.tracking import MlflowClient
+except ModuleNotFoundError:  # pragma: no cover - fallback for local dev without mlflow
+    class MlflowException(RuntimeError):
+        """Placeholder raised when MLflow is unavailable."""
+
+    class MlflowClient:  # type: ignore[override]
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("MlflowClient requires the 'mlflow' package to be installed")
+
+    class _MlflowStub:
+        def __getattr__(self, name):  # noqa: D401
+            def _missing(*args, **kwargs):
+                raise RuntimeError(f"mlflow.{name} requires the 'mlflow' package to be installed")
+
+            return _missing
+
+    mlflow = _MlflowStub()  # type: ignore[assignment]
 from pydantic import BaseModel, ValidationError
 
 from backend.schemas import ExtractionResult
