@@ -5,6 +5,7 @@ from functools import lru_cache
 from backend.application.workflow import ExtractionWorkflow
 from backend.config import get_config
 from backend.extractor import LLMExtractor
+from backend.db.storage import SqliteMeetingsRepository as RawMeetingsRepo
 from backend.infrastructure.persistence.meetings import SQLiteMeetingsRepository
 from backend.infrastructure.storage.blob import BlobStorageService
 from backend.infrastructure.telemetry.mlflow_adapter import MLflowTelemetryAdapter
@@ -42,6 +43,12 @@ def get_transcription_service() -> AzureConversationTranscriber | None:
 def get_meetings_repository() -> SQLiteMeetingsRepository:
     cfg = get_config().database
     return SQLiteMeetingsRepository(cfg.url)
+
+
+@lru_cache(maxsize=1)
+def get_data_repository() -> RawMeetingsRepo:
+    cfg = get_config().database
+    return RawMeetingsRepo(cfg.url)
 
 
 @lru_cache(maxsize=1)

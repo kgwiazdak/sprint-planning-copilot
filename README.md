@@ -46,7 +46,7 @@ Odpowiedź: STRICT JSON zgodny ze schematem.
 
 ## Frontend (React + Vite)
 
-Interfejs użytkownika żyje w katalogu `frontend/` i jest zbudowany w oparciu o React (TypeScript), Material UI oraz React Query. W trybie developerskim wykorzystywany jest MSW (fixtures), więc backend nie jest wymagany.
+Interfejs użytkownika żyje w katalogu `frontend/` i jest zbudowany w oparciu o React (TypeScript), Material UI oraz React Query. Panel zawsze komunikuje się z backendem FastAPI, więc do pracy wymagany jest uruchomiony serwer API (np. `poetry run uvicorn ...` lub `docker compose up`).
 
 ### Szybki start
 
@@ -59,14 +59,14 @@ npm run dev
 - `npm run build` — produkcyjny build Vite
 - `npm run preview` — szybki podgląd statycznego buildu
 
-Domyślny plik `.env.development` ustawia `VITE_USE_MOCKS=true`. Aby pracować z prawdziwym backendem, ustaw `VITE_USE_MOCKS=false` i wskaż `VITE_API_URL` (np. `http://localhost:8000/api`).
+Domyślnie `.env.development` ustawia `VITE_API_URL=http://localhost:8000/api`, więc panel rozmawia z FastAPI i korzysta z danych w SQLite. Jeśli potrzebujesz trybu offline, zaimplementuj go we własnym zakresie (wsparcie MSW zostało usunięte w docelowym trybie produkcyjnym).
 
 ### Architektura UI
 
 ```
 frontend/src
 ├─ app/          # routing, theming, providers
-├─ api/          # axios klient, React Query hooks, MSW fixtures
+├─ api/          # axios klient, React Query hooks
 ├─ components/   # współdzielone elementy (DataGridToolbar, TaskDrawer, ConfirmDialog)
 ├─ features/     # moduły meetings + tasks (listy, formularze, review HITL)
 ├─ schemas/      # walidacja Zod (task/meeting)
