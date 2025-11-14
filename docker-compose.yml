@@ -26,3 +26,14 @@ services:
       - "5000:5000"
     volumes:
       - ./data/mlflow:/mlflow
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_FRONTEND_API_URL:-http://api:8000/api}
+        VITE_USE_MOCKS: ${VITE_USE_MOCKS:-false}
+    ports:
+      - "4173:4173"
+    depends_on:
+      - api

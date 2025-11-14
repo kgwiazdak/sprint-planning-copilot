@@ -43,3 +43,51 @@ Odpowiedź: STRICT JSON zgodny ze schematem.
 - Wyłącz `MOCK_LLM` i skonfiguruj Azure OpenAI (`LLM_PROVIDER=azure`, itd.)
 - Skonfiguruj docelową usługę STT (np. Azure Speech) według potrzeb
 - Zamień SQLite na Postgres (SQLAlchemy) + dodaj RAG (Azure AI Search/pgvector)
+
+## Frontend (React + Vite)
+
+Interfejs użytkownika żyje w katalogu `frontend/` i jest zbudowany w oparciu o React (TypeScript), Material UI oraz React Query. W trybie developerskim wykorzystywany jest MSW (fixtures), więc backend nie jest wymagany.
+
+### Szybki start
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+- `npm run build` — produkcyjny build Vite
+- `npm run preview` — szybki podgląd statycznego buildu
+
+Domyślny plik `.env.development` ustawia `VITE_USE_MOCKS=true`. Aby pracować z prawdziwym backendem, ustaw `VITE_USE_MOCKS=false` i wskaż `VITE_API_URL` (np. `http://localhost:8000/api`).
+
+### Architektura UI
+
+```
+frontend/src
+├─ app/          # routing, theming, providers
+├─ api/          # axios klient, React Query hooks, MSW fixtures
+├─ components/   # współdzielone elementy (DataGridToolbar, TaskDrawer, ConfirmDialog)
+├─ features/     # moduły meetings + tasks (listy, formularze, review HITL)
+├─ schemas/      # walidacja Zod (task/meeting)
+├─ types/        # modele domenowe
+└─ utils/        # formatery dat itp.
+```
+
+Kluczowe widoki:
+
+- `/review` — Review & Approve (DataGrid z inline edit + drawer, bulk approve/reject)
+- `/meetings` — lista spotkań + edycja/usuń
+- `/meetings/:id/tasks` — zadania z danego spotkania, filtry statusów, link do edycji
+- `/meetings/new` — formularz nowego spotkania (React Hook Form + Zod)
+- `/tasks/:id/edit` — pełna edycja zadania
+
+### Docker Compose
+
+`docker compose up --build` uruchamia:
+
+- `api` na porcie `8000`
+- `mlflow` na porcie `5000`
+- `frontend` (statyczny build Vite serwowany przez Nginx) na porcie `4173`
+
+Domyślnie frontend w kontenerze wskazuje na usługę backendową pod adresem `http://api:8000/api`. Własny adres można nadpisać przez zmienną `VITE_FRONTEND_API_URL`.
