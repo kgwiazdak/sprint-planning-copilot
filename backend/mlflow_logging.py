@@ -559,7 +559,8 @@ def _prepare_transcript_snippet(transcript: str, redactor: BasePIIRedactor) -> t
     snippet_source = transcript[: min(MAX_TRANSCRIPT_CHARS, len(transcript))]
     snippet = snippet_source[:TRANSCRIPT_SNIPPET_CHARS]
     redacted_snippet, rules = redactor.redact(snippet)
-    return _scrub_secrets(redacted_snippet), rules
+    cleaned = _scrub_secrets(redacted_snippet)
+    return cleaned[:TRANSCRIPT_SNIPPET_CHARS], rules
 
 
 def _compute_approval_stats(payload: Mapping[str, Any]) -> Mapping[str, Any]:

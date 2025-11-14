@@ -5,8 +5,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.api.dependencies import get_data_repository
-from backend.db.storage import SqliteMeetingsRepository, TASK_STATUSES
+from backend.infrastructure.persistence.sqlite import SqliteMeetingsRepository, TASK_STATUSES
+from backend.presentation.http.dependencies import data_repository
 
 router = APIRouter(prefix="/api", tags=["ui"])
 
@@ -38,7 +38,7 @@ class BulkAction(BaseModel):
     ids: list[str] = Field(default_factory=list)
 
 
-def _repo(repo: SqliteMeetingsRepository = Depends(get_data_repository)) -> SqliteMeetingsRepository:
+def _repo(repo: SqliteMeetingsRepository = Depends(data_repository)) -> SqliteMeetingsRepository:
     return repo
 
 

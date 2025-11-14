@@ -25,14 +25,14 @@ curl -X POST http://127.0.0.1:8000/extract -F "file=@samples/sample_transcript.t
 
 Odpowiedź: STRICT JSON zgodny ze schematem.
 
-## Pliki kluczowe
+## Architektura backendu (hexagonal)
 
-- `backend/app.py` — FastAPI endpoint `POST /extract`
-- `backend/schemas.py` — Pydantic schema walidująca wynik
-- `backend/extractor.py` — logika ekstrakcji (MOCK_LLM=1 → heurystyka; F2 → LLM przez LangChain)
-- `backend/stt.py` — transkrypcja audio przez Whisper
-- `backend/storage.py` — SQLite artefakty (meetings + extraction_runs) — w F2 zamień na Postgres
-- `backend/mlflow_logging.py` — best-effort log do MLflow (opcjonalnie)
+- **presentation** – `backend/presentation/http` (FastAPI routers + DTO dla UI i POST `/extract`)
+- **application** – `backend/application/use_cases/extract_meeting.py` (orchestracja ingest → transcript → extract → persist)
+- **domain** – `backend/domain/ports.py` (porty/kontrakty dla adapterów)
+- **infrastructure** – adapters dla LLM (`backend/infrastructure/llm/task_extractor.py`), bazy (`backend/infrastructure/persistence/sqlite`), blob storage, telemetry i STT
+- **configuration** – `backend/settings.py` (Pydantic settings + DI w `backend/container.py`)
+- **schemas** – `backend/schemas.py` (Pydantic kontrakty dzielone przez aplikację)
 
 ## Próbka
 

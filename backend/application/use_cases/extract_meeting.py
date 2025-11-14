@@ -3,12 +3,11 @@ from __future__ import annotations
 import datetime
 import uuid
 from dataclasses import dataclass
-from typing import Any
 
 import anyio
 from fastapi import UploadFile
 
-from backend.application.ports import (
+from backend.domain.ports import (
     BlobStoragePort,
     ExtractionPort,
     MeetingsRepositoryPort,
@@ -18,8 +17,8 @@ from backend.application.ports import (
 from backend.schemas import ExtractionResult
 
 
-class WorkflowError(RuntimeError):
-    """Raised when the extraction workflow fails."""
+class ExtractionError(RuntimeError):
+    """Raised when the extract workflow fails."""
 
     def __init__(self, message: str, *, status_code: int = 500) -> None:
         super().__init__(message)
@@ -27,15 +26,15 @@ class WorkflowError(RuntimeError):
 
 
 @dataclass(slots=True)
-class WorkflowContext:
+class IngestedFile:
     meeting_id: str
     filename: str
     content_type: str | None
-    content: bytes
+    payload: bytes
 
 
-class ExtractionWorkflow:
-    """Coordinates file ingestion, transcription, extraction, storage, and telemetry."""
+class ExtractMeetingUseCase:
+    """Coordinates ingestion, transcription, extraction, persistence and telemetry."""
 
     def __init__(
         self,
@@ -59,58 +58,57 @@ class ExtractionWorkflow:
         else:
             self._audio_extensions = tuple()
 
-    async def run(self, file: UploadFile) -> ExtractionResult:
-        content = await file.read()
-        if not content:
-            raise WorkflowError("Uploaded file is empty.", status_code=400)
+    async def __call__(self, upload: UploadFile) -> ExtractionResult:
+        if not (content := await upload.read()):
+            raise ExtractionError("Uploaded file is empty.", status_code=400)
 
-        context = WorkflowContext(
+        context = IngestedFile(
             meeting_id=str(uuid.uuid4()),
-            filename=file.filename or "uploaded_file",
-            content_type=file.content_type,
-            content=content,
+            filename=upload.filename or "uploaded_file",
+            content_type=upload.content_type,
+            payload=content,
         )
 
         transcript_blob_uri = await self._persist_original_file(context)
-        transcript = await self._transcript_for(context)
+        transcript = await self._resolve_transcript(context)
         result = await self._extract(transcript)
         meeting_id, run_id = await self._store(context, transcript, result)
         await self._log(meeting_id, run_id, transcript, result, transcript_blob_uri)
         return result
 
-    async def _persist_original_file(self, ctx: WorkflowContext) -> str | None:
+    async def _persist_original_file(self, ctx: IngestedFile) -> str | None:
         if not self._blob_storage:
             return None
         return await self._blob_storage.save_file(
             meeting_id=ctx.meeting_id,
             original_filename=ctx.filename,
-            content=ctx.content,
+            content=ctx.payload,
             content_type=ctx.content_type,
         )
 
-    async def _transcript_for(self, ctx: WorkflowContext) -> str:
+    async def _resolve_transcript(self, ctx: IngestedFile) -> str:
         name_lower = ctx.filename.lower()
         if name_lower.endswith((".txt", ".json")):
-            return ctx.content.decode("utf-8", errors="ignore")
+            return ctx.payload.decode("utf-8", errors="ignore")
 
         transcription = self._transcription
         audio_exts = self._audio_extensions
         if transcription and audio_exts and name_lower.endswith(audio_exts):
-            return await anyio.to_thread.run_sync(transcription.transcribe, ctx.content, name_lower)
+            return await anyio.to_thread.run_sync(transcription.transcribe, ctx.payload, name_lower)
         if audio_exts and name_lower.endswith(audio_exts):
-            raise WorkflowError("Transcription service is not configured.", status_code=500)
+            raise ExtractionError("Transcription service is not configured.", status_code=500)
 
-        raise WorkflowError("Unsupported file type. Upload .txt, .json, or supported audio.", status_code=400)
+        raise ExtractionError("Unsupported file type. Upload .txt, .json, or supported audio.", status_code=400)
 
     async def _extract(self, transcript: str) -> ExtractionResult:
         try:
             return await anyio.to_thread.run_sync(self._extractor.extract, transcript)
         except Exception as exc:  # pragma: no cover - defensive
-            raise WorkflowError(f"Extraction failed: {exc}", status_code=500) from exc
+            raise ExtractionError(f"Extraction failed: {exc}", status_code=500) from exc
 
     async def _store(
         self,
-        ctx: WorkflowContext,
+        ctx: IngestedFile,
         transcript: str,
         result: ExtractionResult,
     ) -> tuple[str, str]:
@@ -125,7 +123,7 @@ class ExtractionWorkflow:
         try:
             return await anyio.to_thread.run_sync(_persist)
         except Exception as exc:  # pragma: no cover - defensive
-            raise WorkflowError(f"Failed to persist results: {exc}", status_code=500) from exc
+            raise ExtractionError(f"Failed to persist results: {exc}", status_code=500) from exc
 
     async def _log(
         self,

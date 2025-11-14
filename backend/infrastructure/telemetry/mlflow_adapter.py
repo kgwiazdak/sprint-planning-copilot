@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from backend.application.ports import TelemetryPort
+from backend.domain.ports import TelemetryPort
 from backend.mlflow_logging import log_extraction_run, logger
 from backend.schemas import ExtractionResult
 

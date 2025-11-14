@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.config import get_config
+from backend.settings import get_config
 from backend.infrastructure.transcription.azure_conversation import (
     AzureConversationTranscriber,
     SUPPORTED_AUDIO_EXTENSIONS,

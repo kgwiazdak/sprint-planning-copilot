@@ -64,5 +64,9 @@ class AppConfig(BaseModel):
 
 
 @lru_cache(maxsize=1)
-def get_config() -> AppConfig:
+def get_settings() -> AppConfig:
     return AppConfig.load()
+
+
+# Backwards compatibility for modules importing get_config directly.
+get_config = get_settings
