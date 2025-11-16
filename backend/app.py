@@ -3,7 +3,6 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.presentation.http.extraction_router import router as extraction_router
 from backend.presentation.http.ui_router import router as ui_router
 
 
@@ -21,7 +20,6 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.include_router(extraction_router)
     app.include_router(ui_router)
     return app
 

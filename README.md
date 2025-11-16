@@ -17,17 +17,9 @@ Poetry automatycznie zarządza środowiskiem w `.venv`, więc nie trzeba ręczni
 > Opcjonalnie ustaw `WHISPER_MODEL` (np. `base`, `small`, `medium`) aby wybrać wariant modelu Whisper używanego do
 > transkrypcji.
 
-## Użycie (curl)
-
-```bash
-curl -X POST http://127.0.0.1:8000/extract -F "file=@samples/sample_transcript.txt"
-```
-
-Odpowiedź: STRICT JSON zgodny ze schematem.
-
 ## Architektura backendu (hexagonal)
 
-- **presentation** – `backend/presentation/http` (FastAPI routers + DTO dla UI i POST `/extract`)
+- **presentation** – `backend/presentation/http` (FastAPI routers + DTO dla UI, upload ticket API, import kolejek spotkań)
 - **application** – `backend/application/use_cases/extract_meeting.py` (orchestracja ingest → transcript → extract → persist)
 - **domain** – `backend/domain/ports.py` (porty/kontrakty dla adapterów)
 - **infrastructure** – adapters dla LLM (`backend/infrastructure/llm/task_extractor.py`), bazy (`backend/infrastructure/persistence/sqlite`), blob storage, telemetry i STT

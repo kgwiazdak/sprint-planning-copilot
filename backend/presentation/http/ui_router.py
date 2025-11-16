@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+import uuid
+from datetime import datetime
+import asyncio
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase
 from backend.infrastructure.persistence.sqlite import SqliteMeetingsRepository, TASK_STATUSES
-from backend.presentation.http.dependencies import data_repository
+from backend.infrastructure.storage.blob import BlobStorageConfigError, BlobStorageService
+from backend.presentation.http.dependencies import blob_storage_service, data_repository, extraction_workflow
 
 router = APIRouter(prefix="/api", tags=["ui"])
+logger = logging.getLogger(__name__)
 
 
 class MeetingCreate(BaseModel):
@@ -36,6 +43,29 @@ class TaskUpdate(BaseModel):
 
 class BulkAction(BaseModel):
     ids: list[str] = Field(default_factory=list)
+
+
+class BlobUploadRequest(BaseModel):
+    filename: str = Field(..., min_length=1)
+    contentType: str | None = None
+    meetingId: str | None = None
+    expiresIn: int | None = Field(default=3600, ge=60, le=86400)
+
+
+class BlobUploadResponse(BaseModel):
+    uploadUrl: str
+    blobUrl: str
+    blobPath: str
+    expiresAt: datetime
+    meetingId: str
+
+
+class MeetingImportRequest(BaseModel):
+    title: str = Field(..., min_length=3)
+    startedAt: str
+    blobUrl: str = Field(..., min_length=1)
+    originalFilename: str | None = None
+    meetingId: str | None = None
 
 
 def _repo(repo: SqliteMeetingsRepository = Depends(data_repository)) -> SqliteMeetingsRepository:
@@ -133,3 +163,50 @@ def bulk_reject_tasks(payload: BulkAction, repo: SqliteMeetingsRepository = Depe
 @router.get("/users")
 def list_users(repo: SqliteMeetingsRepository = Depends(_repo)):
     return repo.list_users()
+
+
+@router.post("/uploads/blob", response_model=BlobUploadResponse)
+def create_blob_upload(
+    payload: BlobUploadRequest,
+    storage: BlobStorageService = Depends(blob_storage_service),
+):
+    meeting_id = payload.meetingId or str(uuid.uuid4())
+    try:
+        token = storage.generate_upload_token(
+            meeting_id=meeting_id,
+            original_filename=payload.filename,
+            content_type=payload.contentType,
+            expires_in_seconds=payload.expiresIn or 3600,
+        )
+    except (BlobStorageConfigError, RuntimeError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return BlobUploadResponse(
+        uploadUrl=token.upload_url,
+        blobUrl=token.blob_url,
+        blobPath=token.blob_path,
+        expiresAt=token.expires_at,
+        meetingId=meeting_id,
+    )
+
+
+@router.post("/meetings/import", status_code=202)
+async def import_meeting(
+    payload: MeetingImportRequest,
+    workflow: ExtractMeetingUseCase = Depends(extraction_workflow),
+):
+    meeting_id = payload.meetingId or str(uuid.uuid4())
+
+    async def _run() -> None:
+        try:
+            await workflow(
+                title=payload.title,
+                started_at=payload.startedAt,
+                blob_url=payload.blobUrl,
+                original_filename=payload.originalFilename,
+                meeting_id=meeting_id,
+            )
+        except Exception:
+            logger.exception("Asynchronous meeting import failed", extra={"meeting_id": meeting_id})
+
+    asyncio.create_task(_run())
+    return {"meetingId": meeting_id, "status": "queued"}

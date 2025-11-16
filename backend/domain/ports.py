@@ -17,6 +17,9 @@ class BlobStoragePort(Protocol):
     ) -> str:
         """Persist the original upload and return a blob URI."""
 
+    async def download_blob(self, blob_url: str) -> bytes:
+        """Retrieve bytes from an existing blob URL."""
+
 
 @runtime_checkable
 class TranscriptionPort(Protocol):

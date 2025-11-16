@@ -3,9 +3,9 @@ from __future__ import annotations
 import datetime
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 
 import anyio
-from fastapi import UploadFile
 
 from backend.domain.ports import (
     BlobStoragePort,
@@ -33,6 +33,7 @@ class IngestedFile:
     payload: bytes
     title: str | None = None
     started_at: str | None = None
+    blob_url: str | None = None
 
 
 class ExtractMeetingUseCase:
@@ -60,27 +61,44 @@ class ExtractMeetingUseCase:
         else:
             self._audio_extensions = tuple()
 
-    async def __call__(self, upload: UploadFile, *, title: str | None = None, started_at: str | None = None) -> ExtractionResult:
-        if not (content := await upload.read()):
-            raise ExtractionError("Uploaded file is empty.", status_code=400)
+    async def __call__(
+        self,
+        *,
+        title: str,
+        started_at: str,
+        blob_url: str,
+        original_filename: str | None = None,
+        meeting_id: str | None = None,
+    ) -> ExtractionResult:
+        if not blob_url:
+            raise ExtractionError("blob_url is required.", status_code=400)
+        if not self._blob_storage:
+            raise ExtractionError("Blob storage is not configured.", status_code=500)
+
+        payload = await self._blob_storage.download_blob(blob_url)
+        if not payload:
+            raise ExtractionError("Referenced blob is empty.", status_code=400)
 
         context = IngestedFile(
-            meeting_id=str(uuid.uuid4()),
-            filename=upload.filename or "uploaded_file",
-            content_type=upload.content_type,
-            payload=content,
+            meeting_id=meeting_id or str(uuid.uuid4()),
+            filename=original_filename or Path(blob_url).name or "uploaded_file",
+            content_type=None,
+            payload=payload,
             title=title,
             started_at=started_at,
+            blob_url=blob_url,
         )
 
         transcript_blob_uri = await self._persist_original_file(context)
         transcript = await self._resolve_transcript(context)
         result = await self._extract(transcript)
-        meeting_id, run_id = await self._store(context, transcript, result)
-        await self._log(meeting_id, run_id, transcript, result, transcript_blob_uri)
+        run_meeting_id, run_id = await self._store(context, transcript, result)
+        await self._log(run_meeting_id, run_id, transcript, result, transcript_blob_uri)
         return result
 
     async def _persist_original_file(self, ctx: IngestedFile) -> str | None:
+        if ctx.blob_url:
+            return ctx.blob_url
         if not self._blob_storage:
             return None
         return await self._blob_storage.save_file(

@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
-import { apiClient, extractClient } from './client';
+import { apiClient } from './client';
 import { queryKeys } from './queryKeys';
 import type { Meeting, Task, User } from '../types';
 import type { MeetingUpdateValues } from '../schemas/meeting';
@@ -82,16 +82,53 @@ type CreateMeetingInput = {
   file: File;
 };
 
+type BlobUploadTicket = {
+  uploadUrl: string;
+  blobUrl: string;
+  blobPath: string;
+  expiresAt: string;
+  meetingId: string;
+};
+
+const requestBlobUpload = async (file: File): Promise<BlobUploadTicket> => {
+  const { data } = await apiClient.post<BlobUploadTicket>('/uploads/blob', {
+    filename: file.name,
+    contentType: file.type || 'application/octet-stream',
+  });
+  return data;
+};
+
+const uploadFileToBlob = async (uploadUrl: string, file: File) => {
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'x-ms-blob-type': 'BlockBlob',
+      'Content-Type': file.type || 'application/octet-stream',
+    },
+    body: file,
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || 'Failed to upload file to storage');
+  }
+};
+
 export const useCreateMeeting = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ title, startedAt, file }: CreateMeetingInput) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('title', title);
-      formData.append('started_at', startedAt);
-      const { data } = await extractClient.post('/extract', formData);
-      return data;
+      if (!file) {
+        throw new Error('No file provided');
+      }
+      const ticket = await requestBlobUpload(file);
+      await uploadFileToBlob(ticket.uploadUrl, file);
+      await apiClient.post('/meetings/import', {
+        title,
+        startedAt,
+        blobUrl: ticket.blobUrl,
+        originalFilename: file.name,
+        meetingId: ticket.meetingId,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.meetings() });
