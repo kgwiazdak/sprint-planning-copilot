@@ -79,8 +79,22 @@ export const ReviewApprovePage = () => {
     );
   }
 
+  const MAX_VISIBLE_ROWS = 5;
+  const DATA_GRID_ROW_HEIGHT = 78;
+  const DATA_GRID_HEADER_HEIGHT = 64;
+  const REVIEW_TABLE_MAX_HEIGHT =
+    DATA_GRID_HEADER_HEIGHT + MAX_VISIBLE_ROWS * DATA_GRID_ROW_HEIGHT;
+
   return (
-    <Box>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
       <PageHeader
         eyebrow="Human in the loop"
         title="Review & approve"
@@ -96,44 +110,63 @@ export const ReviewApprovePage = () => {
           </Stack>
         }
       />
-      <DataGridToolbar
-        title="Selection"
-        selectionCount={selectedIds.length}
-        onApproveSelected={() =>
-          handleBulkAction(selectedIds, approveTasks, 'Tasks approved')
-        }
-        onRejectSelected={() =>
-          handleBulkAction(selectedIds, rejectTasks, 'Tasks rejected')
-        }
-        onApproveAll={() =>
-          handleBulkAction(
-            filteredTasks.map((task) => task.id),
-            approveTasks,
-            'All tasks approved',
-          )
-        }
-        onRejectAll={() =>
-          handleBulkAction(
-            filteredTasks.map((task) => task.id),
-            rejectTasks,
-            'All tasks rejected',
-          )
-        }
-        disableActions={disableSelectionActions}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        search={search}
-        onSearchChange={setSearch}
-      />
-      <Paper sx={{ p: { xs: 1, md: 2 }, borderRadius: 3 }}>
-        <TasksTable
-          tasks={filteredTasks}
-          users={users}
-          loading={isLoading || isFetching}
-          selectedIds={selectedIds}
-          onSelectionChange={setSelectedIds}
-          onRowDoubleClick={(task) => setDrawerTaskId(task.id)}
+      <Paper
+        sx={{
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 3,
+          flexGrow: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <DataGridToolbar
+          variant="inline"
+          title="Selection"
+          selectionCount={selectedIds.length}
+          onApproveSelected={() =>
+            handleBulkAction(selectedIds, approveTasks, 'Tasks approved')
+          }
+          onRejectSelected={() =>
+            handleBulkAction(selectedIds, rejectTasks, 'Tasks rejected')
+          }
+          onApproveAll={() =>
+            handleBulkAction(
+              filteredTasks.map((task) => task.id),
+              approveTasks,
+              'All tasks approved',
+            )
+          }
+          onRejectAll={() =>
+            handleBulkAction(
+              filteredTasks.map((task) => task.id),
+              rejectTasks,
+              'All tasks rejected',
+            )
+          }
+          disableActions={disableSelectionActions}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          search={search}
+          onSearchChange={setSearch}
         />
+        <Box
+          sx={{
+            flexGrow: 1,
+            minHeight: 0,
+            maxHeight: REVIEW_TABLE_MAX_HEIGHT,
+          }}
+        >
+          <TasksTable
+            tasks={filteredTasks}
+            users={users}
+            loading={isLoading || isFetching}
+            selectedIds={selectedIds}
+            onSelectionChange={setSelectedIds}
+            onRowDoubleClick={(task) => setDrawerTaskId(task.id)}
+          />
+        </Box>
       </Paper>
       <TaskDrawer
         open={Boolean(drawerTaskId)}

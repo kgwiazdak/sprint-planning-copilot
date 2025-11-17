@@ -19,6 +19,16 @@ body {
   background-color: #e9edf7;
 }
 
+html,
+body {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
 #root {
   min-height: 100vh;
+  height: 100%;
 }

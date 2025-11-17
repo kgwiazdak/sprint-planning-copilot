@@ -25,6 +25,7 @@ type DataGridToolbarProps = {
   onStatusFilterChange?: (status: StatusFilter) => void;
   search?: string;
   onSearchChange?: (value: string) => void;
+  variant?: 'card' | 'inline';
 };
 
 export const DataGridToolbar = ({
@@ -39,25 +40,29 @@ export const DataGridToolbar = ({
   onStatusFilterChange,
   search = '',
   onSearchChange,
-}: DataGridToolbarProps) => (
-  <Stack
-    component={Paper}
-    elevation={0}
-    spacing={2}
-    direction={{ xs: 'column', md: 'row' }}
-    alignItems={{ xs: 'stretch', md: 'center' }}
-    justifyContent="space-between"
-    sx={(theme) => ({
-      mb: 3,
-      p: { xs: 2, md: 2.5 },
-      borderRadius: 3,
-      border: `1px solid ${theme.palette.divider}`,
-      background:
-        theme.palette.mode === 'light'
-          ? 'linear-gradient(135deg, rgba(15,23,42,0.02), rgba(37,99,235,0.08))'
-          : 'linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,118,225,0.15))',
-    })}
-  >
+  variant = 'card',
+}: DataGridToolbarProps) => {
+  const isInline = variant === 'inline';
+  return (
+    <Stack
+      component={isInline ? 'div' : Paper}
+      elevation={isInline ? undefined : 0}
+      spacing={2}
+      direction={{ xs: 'column', md: 'row' }}
+      alignItems={{ xs: 'stretch', md: 'center' }}
+      justifyContent="space-between"
+      sx={(theme) => ({
+        mb: isInline ? 2 : 3,
+        p: isInline ? 0 : { xs: 2, md: 2.5 },
+        borderRadius: isInline ? 0 : 3,
+        border: isInline ? 'none' : `1px solid ${theme.palette.divider}`,
+        background: isInline
+          ? 'transparent'
+          : theme.palette.mode === 'light'
+            ? 'linear-gradient(135deg, rgba(15,23,42,0.02), rgba(37,99,235,0.08))'
+            : 'linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,118,225,0.15))',
+      })}
+    >
     <Stack spacing={1} direction="row" alignItems="center">
       {title && (
         <Typography variant="h6" fontWeight={600}>
@@ -140,5 +145,6 @@ export const DataGridToolbar = ({
         </Box>
       )}
     </Stack>
-  </Stack>
-);
+    </Stack>
+  );
+};

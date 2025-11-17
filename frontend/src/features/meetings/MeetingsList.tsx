@@ -14,6 +14,7 @@ import {
   Table,
   TableBody,
   TableCell,
+  TableContainer,
   TableHead,
   TableRow,
   TextField,
@@ -37,6 +38,12 @@ import type { MeetingUpdateValues } from '../../schemas/meeting';
 import type { Meeting, MeetingStatus } from '../../types';
 import { formatDateTime, toDateTimeInput } from '../../utils/format';
 import { PageHeader } from '../../components/PageHeader';
+
+const MEETING_TABLE_HEADER_HEIGHT = 60;
+const MEETING_ROW_HEIGHT = 88;
+const MAX_VISIBLE_MEETINGS = 3;
+const MEETINGS_TABLE_MAX_HEIGHT =
+  MEETING_TABLE_HEADER_HEIGHT + MAX_VISIBLE_MEETINGS * MEETING_ROW_HEIGHT;
 
 export const MeetingsList = () => {
   const navigate = useNavigate();
@@ -140,7 +147,15 @@ export const MeetingsList = () => {
   }
 
   return (
-    <Box>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
       <PageHeader
         eyebrow="Meeting ingestion"
         title="Meetings"
@@ -156,6 +171,7 @@ export const MeetingsList = () => {
         spacing={2}
         flexWrap="wrap"
         mb={3}
+        flexShrink={0}
       >
         {[
           {
@@ -202,79 +218,96 @@ export const MeetingsList = () => {
           </Paper>
         ))}
       </Stack>
-      <Paper sx={{ borderRadius: 3, overflowX: 'auto' }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Title</TableCell>
-              <TableCell>Started at</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Draft tasks</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isLoading
-              ? Array.from({ length: 3 }).map((_, index) => (
-                  <TableRow key={index}>
-                    <TableCell colSpan={5}>
-                      <Skeleton height={32} />
-                    </TableCell>
-                  </TableRow>
-                ))
-              : sortedMeetings.map((meeting) => (
-                  <TableRow key={meeting.id} hover>
-                    <TableCell>
-                      <Typography fontWeight={500}>{meeting.title}</Typography>
-                    </TableCell>
-                    <TableCell>{formatDateTime(meeting.startedAt)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        size="small"
-                        label={meeting.status}
-                        color={getStatusColor(meeting.status)}
-                      />
-                    </TableCell>
-                    <TableCell>{meeting.draftTaskCount}</TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          endIcon={<OpenInNew fontSize="small" />}
-                          onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
-                        >
-                          Open tasks
-                        </Button>
-                        <IconButton
-                          aria-label="Edit meeting"
-                          color="inherit"
-                          onClick={() => setEditingMeeting(meeting)}
-                          size="small"
-                        >
-                          <EditIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          aria-label="Delete meeting"
-                          color="inherit"
-                          onClick={() => setConfirmTarget(meeting)}
-                          size="small"
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                ))}
-            {!isLoading && sortedMeetings.length === 0 && (
+      <Paper
+        sx={{
+          borderRadius: 3,
+          flexGrow: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <TableContainer
+          sx={{
+            flexGrow: 1,
+            maxHeight: MEETINGS_TABLE_MAX_HEIGHT,
+            overflowY: 'auto',
+          }}
+        >
+          <Table size="small" stickyHeader>
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={5}>
-                  <Typography variant="body2">No meetings yet.</Typography>
-                </TableCell>
+                <TableCell>Title</TableCell>
+                <TableCell>Started at</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Draft tasks</TableCell>
+                <TableCell align="right">Actions</TableCell>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHead>
+            <TableBody>
+              {isLoading
+                ? Array.from({ length: 3 }).map((_, index) => (
+                    <TableRow key={index}>
+                      <TableCell colSpan={5}>
+                        <Skeleton height={32} />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                : sortedMeetings.map((meeting) => (
+                    <TableRow key={meeting.id} hover>
+                      <TableCell>
+                        <Typography fontWeight={500}>{meeting.title}</Typography>
+                      </TableCell>
+                      <TableCell>{formatDateTime(meeting.startedAt)}</TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          label={meeting.status}
+                          color={getStatusColor(meeting.status)}
+                        />
+                      </TableCell>
+                      <TableCell>{meeting.draftTaskCount}</TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} justifyContent="flex-end">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            endIcon={<OpenInNew fontSize="small" />}
+                            onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
+                          >
+                            Open tasks
+                          </Button>
+                          <IconButton
+                            aria-label="Edit meeting"
+                            color="inherit"
+                            onClick={() => setEditingMeeting(meeting)}
+                            size="small"
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            aria-label="Delete meeting"
+                            color="inherit"
+                            onClick={() => setConfirmTarget(meeting)}
+                            size="small"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+              {!isLoading && sortedMeetings.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <Typography variant="body2">No meetings yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </Paper>
       <ConfirmDialog
         open={Boolean(confirmTarget)}

@@ -267,7 +267,8 @@ export const TasksTable = ({
 
   return (
     <DataGrid
-      autoHeight
+      rowHeight={68}
+      columnHeaderHeight={62}
       rows={tasks}
       columns={columns}
       loading={loading}
@@ -289,6 +290,7 @@ export const TasksTable = ({
         backgroundColor: 'transparent',
         border: 'none',
         borderRadius: 3,
+        height: '100%',
         '.MuiDataGrid-columnHeaders': {
           backgroundColor:
             theme.palette.mode === 'light'

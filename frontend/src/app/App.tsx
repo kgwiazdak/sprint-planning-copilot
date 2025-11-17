@@ -103,7 +103,9 @@ const NavList = () => {
 export const App = () => (
   <Box
     sx={(theme) => ({
-      minHeight: '100vh',
+      height: '100vh',
+      minHeight: 0,
+      overflow: 'hidden',
       backgroundColor: theme.palette.background.default,
       backgroundImage:
         theme.palette.mode === 'light'
@@ -119,6 +121,8 @@ export const App = () => (
         flexDirection: { xs: 'column', md: 'row' },
         gap: { xs: 3, md: 4 },
         padding: { xs: 3, md: 5 },
+        height: '100%',
+        minHeight: 0,
       }}
     >
       <Paper
@@ -129,17 +133,18 @@ export const App = () => (
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
-          gap: 3,
-          px: { xs: 3, md: 3 },
-          py: { xs: 3, md: 4 },
+          gap: 2.5,
+          px: { xs: 2.5, md: 3 },
+          py: { xs: 2.5, md: 3 },
           borderRadius: 3,
-          position: 'sticky',
-          top: { xs: 16, md: 32 },
-          alignSelf: { xs: 'stretch', md: 'flex-start' },
+          position: 'relative',
+          alignSelf: 'stretch',
+          height: '100%',
           background:
             theme.palette.mode === 'light'
               ? 'rgba(255,255,255,0.9)'
               : 'rgba(15,23,42,0.92)',
+          overflow: 'hidden',
         })}
       >
         <Stack spacing={1}>
@@ -156,28 +161,6 @@ export const App = () => (
             Upload meetings, let extraction run in the background, and keep humans in the loop for approvals.
           </Typography>
         </Stack>
-        <Box
-          sx={(theme) => ({
-            borderRadius: 2,
-            p: 2.5,
-            background:
-              theme.palette.mode === 'light'
-                ? 'linear-gradient(135deg, rgba(37,99,235,0.12), rgba(14,165,233,0.12))'
-                : 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(14,165,233,0.2))',
-          })}
-        >
-          <Typography
-            variant="subtitle2"
-            color="primary"
-            fontWeight={600}
-            gutterBottom
-          >
-            Workflow at a glance
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            1) Upload or import meetings. 2) Let the worker transcribe & extract tasks. 3) Approve Jira-ready issues.
-          </Typography>
-        </Box>
         <NavList />
         <Divider />
         <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -196,6 +179,11 @@ export const App = () => (
         component="main"
         flexGrow={1}
         sx={(theme) => ({
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
+          minHeight: 0,
+          overflow: 'hidden',
           borderRadius: 4,
           border: `1px solid ${theme.palette.divider}`,
           padding: { xs: 2.5, md: 4 },
@@ -208,19 +196,20 @@ export const App = () => (
             theme.palette.mode === 'light'
               ? '0 35px 65px rgba(15,23,42,0.15)'
               : '0 40px 70px rgba(2,6,23,0.85)',
-          minHeight: { md: 'calc(100vh - 96px)' },
         })}
       >
-        <Routes>
-          <Route path="/" element={<Navigate to="/review" replace />} />
-          <Route path="/review" element={<ReviewApprovePage />} />
-          <Route path="/meetings" element={<MeetingsList />} />
-          <Route path="/meetings/new" element={<NewMeetingForm />} />
-          <Route path="/meetings/:id/tasks" element={<MeetingTasksPage />} />
-          <Route path="/tasks/:id/edit" element={<EditTaskPage />} />
-          <Route path="/voices" element={<VoiceProfilesPage />} />
-          <Route path="*" element={<Navigate to="/review" replace />} />
-        </Routes>
+        <Box sx={{ flexGrow: 1, minHeight: 0, overflow: 'hidden' }}>
+          <Routes>
+            <Route path="/" element={<Navigate to="/review" replace />} />
+            <Route path="/review" element={<ReviewApprovePage />} />
+            <Route path="/meetings" element={<MeetingsList />} />
+            <Route path="/meetings/new" element={<NewMeetingForm />} />
+            <Route path="/meetings/:id/tasks" element={<MeetingTasksPage />} />
+            <Route path="/tasks/:id/edit" element={<EditTaskPage />} />
+            <Route path="/voices" element={<VoiceProfilesPage />} />
+            <Route path="*" element={<Navigate to="/review" replace />} />
+          </Routes>
+        </Box>
       </Box>
     </Box>
   </Box>
