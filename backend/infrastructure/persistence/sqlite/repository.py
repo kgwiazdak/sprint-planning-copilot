@@ -5,6 +5,7 @@ import sqlite3
 import uuid
 from typing import Any, Iterable, Optional
 
+from backend.audit import log_meeting_access
 from backend.domain.ports import MeetingsRepositoryPort
 from backend.domain.status import MeetingStatus
 from backend.schemas import ExtractionResult
@@ -19,9 +20,21 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
 
     def __init__(self, db_url: str | None = None) -> None:
         self._db = SqliteDatabase(db_url)
+        log_meeting_access("repository_init", details={"backend": "sqlite"})
+
+    def _audit(
+        self,
+        action: str,
+        *,
+        meeting_id: str | None = None,
+        resource: str = "meeting",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        log_meeting_access(action, meeting_id=meeting_id, resource=resource, details=details)
 
     # --- Meeting queries -------------------------------------------------
     def list_meetings(self) -> list[dict[str, Any]]:
+        self._audit("list")
         conn = self._db.connect()
         try:
             rows = conn.execute(
@@ -48,6 +61,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
+        self._audit("get", meeting_id=meeting_id)
         conn = self._db.connect()
         try:
             row = conn.execute(
@@ -85,6 +99,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         source_text: str | None,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
+        self._audit("create", meeting_id=meeting_id)
         now = utc_now_iso()
         conn = self._db.connect()
         try:
@@ -110,6 +125,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         return self.get_meeting(meeting_id)
 
     def update_meeting(self, meeting_id: str, *, title: str | None, started_at: str | None) -> dict[str, Any]:
+        self._audit("update", meeting_id=meeting_id)
         fields = []
         params: list[Any] = []
         if title is not None:
@@ -142,6 +158,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         return meeting
 
     def delete_meeting(self, meeting_id: str) -> bool:
+        self._audit("delete", meeting_id=meeting_id)
         conn = self._db.connect()
         try:
             cur = conn.execute("DELETE FROM meetings WHERE id = ?", (meeting_id,))
@@ -152,6 +169,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
 
     # --- Task queries ----------------------------------------------------
     def list_tasks(self, *, meeting_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]:
+        self._audit("list_tasks", meeting_id=meeting_id, resource="task", details={"status": status})
         conn = self._db.connect()
         try:
             query = "SELECT * FROM tasks"
@@ -172,6 +190,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
+        self._audit("get_task", resource="task", details={"task_id": task_id})
         conn = self._db.connect()
         try:
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -180,6 +199,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._audit("update_task", resource="task", details={"task_id": task_id})
         allowed = {
             "summary": "summary",
             "description": "description",
@@ -229,6 +249,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
 
     def bulk_update_status(self, ids: Iterable[str], status: str) -> int:
         ids = list(ids)
+        self._audit("bulk_update_status", resource="task", details={"ids": ids, "status": status})
         if not ids:
             return 0
         conn = self._db.connect()
@@ -251,6 +272,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
 
     def get_tasks_by_ids(self, ids: Iterable[str]) -> list[dict[str, Any]]:
         task_ids = [task_id for task_id in ids if task_id]
+        self._audit("get_tasks_by_ids", resource="task", details={"ids": task_ids})
         if not task_ids:
             return []
         placeholders = ",".join("?" for _ in task_ids)
@@ -273,6 +295,11 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None) -> None:
+        self._audit(
+            "mark_task_pushed_to_jira",
+            resource="task",
+            details={"task_id": task_id, "issue_key": issue_key, "issue_url": issue_url},
+        )
         now = utc_now_iso()
         conn = self._db.connect()
         try:
@@ -351,6 +378,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         started_at: str,
         blob_url: str,
     ) -> None:
+        self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
         now = utc_now_iso()
         conn = self._db.connect()
         try:
@@ -378,6 +406,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def update_meeting_status(self, meeting_id: str, status: str) -> None:
+        self._audit("status_change", meeting_id=meeting_id, details={"status": status})
         conn = self._db.connect()
         try:
             conn.execute("UPDATE meetings SET status = ? WHERE id = ?", (status, meeting_id))
@@ -397,6 +426,11 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         blob_url: Optional[str] = None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
+        self._audit(
+            "store_result",
+            meeting_id=meeting_id,
+            details={"filename": filename, "tasks": len(result_model.tasks)},
+        )
         now = utc_now_iso()
         meeting_title = title or filename
         meeting_started_at = started_at or now

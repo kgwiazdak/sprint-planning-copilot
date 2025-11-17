@@ -6,6 +6,7 @@ from typing import Any, Iterable
 
 from azure.cosmos import CosmosClient, PartitionKey, exceptions
 
+from backend.audit import log_meeting_access
 from backend.domain.ports import MeetingsRepositoryPort
 from backend.domain.status import MeetingStatus
 from backend.schemas import ExtractionResult
@@ -49,6 +50,17 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             runs_container,
             partition_key=PartitionKey(path="/meetingId"),
         )
+        log_meeting_access("repository_init", details={"backend": "cosmos"})
+
+    def _audit(
+        self,
+        action: str,
+        *,
+        meeting_id: str | None = None,
+        resource: str = "meeting",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        log_meeting_access(action, meeting_id=meeting_id, resource=resource, details=details)
 
     def _create_database(self, database_name: str):
         db = self._client.get_database_client(database_name)
@@ -79,6 +91,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
     # --- Meeting queries -------------------------------------------------
 
     def list_meetings(self) -> list[dict[str, Any]]:
+        self._audit("list")
         meetings = list(self._meetings.read_all_items())
         draft_counts: dict[str, int] = {}
         for item in meetings:
@@ -90,6 +103,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         ]
 
     def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
+        self._audit("get", meeting_id=meeting_id)
         try:
             item = self._meetings.read_item(item=meeting_id, partition_key=meeting_id)
             return self._serialize_meeting(item, self._count_draft_tasks(meeting_id))
@@ -105,6 +119,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         source_text: str | None,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
+        self._audit("create", meeting_id=meeting_id)
         now = utc_now_iso()
         document = {
             "id": meeting_id,
@@ -120,6 +135,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return self._serialize_meeting(document, 0)
 
     def update_meeting(self, meeting_id: str, *, title: str | None, started_at: str | None) -> dict[str, Any]:
+        self._audit("update", meeting_id=meeting_id)
         existing = self.get_meeting(meeting_id)
         if not existing:
             raise ValueError("Meeting not found")
@@ -143,6 +159,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return self.get_meeting(meeting_id)  # refreshed with counts
 
     def delete_meeting(self, meeting_id: str) -> bool:
+        self._audit("delete", meeting_id=meeting_id)
         try:
             self._meetings.delete_item(item=meeting_id, partition_key=meeting_id)
         except exceptions.CosmosResourceNotFoundError:
@@ -154,6 +171,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
     # --- Task queries ----------------------------------------------------
 
     def list_tasks(self, *, meeting_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]:
+        self._audit("list_tasks", meeting_id=meeting_id, resource="task", details={"status": status})
         filters = []
         params: dict[str, Any] = {}
         if meeting_id:
@@ -175,6 +193,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return [self._serialize_task(item, assignee_map) for item in items]
 
     def get_task(self, task_id: str) -> dict[str, Any] | None:
+        self._audit("get_task", resource="task", details={"task_id": task_id})
         query = "SELECT * FROM c WHERE c.id = @id"
         items = list(
             self._tasks.query_items(
@@ -189,6 +208,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return self._serialize_task(items[0], assignee)
 
     def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._audit("update_task", resource="task", details={"task_id": task_id})
         existing = self.get_task(task_id)
         if not existing:
             raise ValueError("Task not found")
@@ -216,9 +236,11 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return self.get_task(task_id)
 
     def bulk_update_status(self, ids: Iterable[str], status: str) -> int:
+        ids_list = list(ids)
+        self._audit("bulk_update_status", resource="task", details={"ids": ids_list, "status": status})
         updated = 0
         now = utc_now_iso()
-        for task in self.get_tasks_by_ids(ids):
+        for task in self.get_tasks_by_ids(ids_list):
             meeting_id = task["meetingId"]
             doc = self._tasks.read_item(task["id"], partition_key=meeting_id)
             doc["status"] = status
@@ -228,6 +250,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return updated
 
     def get_tasks_by_ids(self, ids: Iterable[str]) -> list[dict[str, Any]]:
+        self._audit("get_tasks_by_ids", resource="task", details={"ids": list(ids)})
         found: list[dict[str, Any]] = []
         unique_ids = {task_id for task_id in ids if task_id}
         if not unique_ids:
@@ -239,6 +262,11 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return found
 
     def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None) -> None:
+        self._audit(
+            "mark_task_pushed_to_jira",
+            resource="task",
+            details={"task_id": task_id, "issue_key": issue_key, "issue_url": issue_url},
+        )
         task = self.get_task(task_id)
         if not task:
             raise ValueError("Task not found")
@@ -290,6 +318,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         started_at: str,
         blob_url: str,
     ) -> None:
+        self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
         now = utc_now_iso()
         document = {
             "id": meeting_id,
@@ -302,6 +331,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         self._meetings.upsert_item(document)
 
     def update_meeting_status(self, meeting_id: str, status: str) -> None:
+        self._audit("status_change", meeting_id=meeting_id, details={"status": status})
         meeting = self.get_meeting(meeting_id)
         if not meeting:
             return
@@ -321,6 +351,11 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         blob_url: str | None = None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
+        self._audit(
+            "store_result",
+            meeting_id=meeting_id,
+            details={"filename": filename, "tasks": len(result_model.tasks)},
+        )
         now = utc_now_iso()
         meeting_doc = {
             "id": meeting_id,

@@ -808,6 +808,7 @@ def _ensure_unique_run_name(base_name: str, meeting_id: str, experiment_id: str)
 
 
 def _configure_mlflow() -> MlflowSetup | None:
+    _ensure_artifact_root()
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI")
     if tracking_uri:
         mlflow.set_tracking_uri(tracking_uri)
@@ -841,3 +842,29 @@ def _configure_mlflow() -> MlflowSetup | None:
         credential_mode,
     )
     return MlflowSetup(experiment_id=experiment.experiment_id, tracking_uri=resolved_tracking_uri)
+
+
+def _ensure_artifact_root() -> None:
+    if os.getenv("MLFLOW_DEFAULT_ARTIFACT_ROOT"):
+        return
+    container = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    if not container or not connection_string:
+        return
+    endpoints = _parse_connection_string(connection_string)
+    account_name = endpoints.get("AccountName")
+    if not account_name:
+        return
+    path = f"wasbs://{container}@{account_name}.blob.core.windows.net/mlflow"
+    os.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = path
+    logger.info("Configured MLflow artifact root at %s", path)
+
+
+def _parse_connection_string(connection_string: str) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for segment in connection_string.split(";"):
+        if not segment or "=" not in segment:
+            continue
+        key, value = segment.split("=", 1)
+        values[key] = value
+    return values

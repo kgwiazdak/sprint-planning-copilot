@@ -11,6 +11,7 @@
     "test:e2e": "npm run build && playwright test"
   },
   "dependencies": {
+    "@azure/msal-browser": "^3.30.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@hookform/resolvers": "^5.2.2",

@@ -47,6 +47,7 @@ class BlobStorageService:
         parts = self._parse_connection_string(connection_string)
         self._account_key = parts.get("AccountKey")
         self._ensure_container_exists()
+        self._max_upload_ttl_seconds = max(60, min(int(os.getenv("BLOB_UPLOAD_MAX_TTL_SECONDS", "900")), 3600))
 
     @classmethod
     def from_env(cls) -> "BlobStorageService":
@@ -117,7 +118,11 @@ class BlobStorageService:
         if not self._account_key:
             raise BlobStorageConfigError("Azure Storage account key is required to generate SAS upload URLs.")
         blob_name = self._build_blob_name(meeting_id, original_filename)
-        expiry = datetime.now(tz=timezone.utc) + timedelta(seconds=expires_in_seconds)
+        ttl = self.clamp_token_ttl(
+            expires_in_seconds,
+            max_seconds=self._max_upload_ttl_seconds,
+        )
+        expiry = datetime.now(tz=timezone.utc) + timedelta(seconds=ttl)
         sas = generate_blob_sas(
             account_name=self._account_name,
             container_name=self._container_name,
@@ -172,3 +177,9 @@ class BlobStorageService:
             key, value = segment.split("=", 1)
             parts[key] = value
         return parts
+
+    @staticmethod
+    def clamp_token_ttl(requested: Optional[int], *, max_seconds: int, min_seconds: int = 60) -> int:
+        if not requested or requested <= 0:
+            return max_seconds
+        return max(min_seconds, min(requested, max_seconds))

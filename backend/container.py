@@ -11,6 +11,11 @@ from backend.infrastructure.jira import JiraClient
 from backend.infrastructure.llm.task_extractor import LLMExtractor
 from backend.infrastructure.persistence.cosmos import CosmosMeetingsRepository
 from backend.infrastructure.persistence.sqlite import SqliteMeetingsRepository
+from backend.infrastructure.queue.azure_storage import (
+    AzureMeetingImportQueue,
+    AzureQueueWorker,
+    _ensure_queue_client,
+)
 from backend.infrastructure.queue.background import BackgroundMeetingImportQueue
 from backend.infrastructure.storage.blob import BlobStorageService
 from backend.infrastructure.telemetry.mlflow_adapter import MLflowTelemetryAdapter
@@ -114,9 +119,43 @@ def get_extract_use_case() -> ExtractMeetingUseCase:
 
 
 @lru_cache(maxsize=1)
-def get_meeting_queue() -> BackgroundMeetingImportQueue:
+def get_meeting_queue():
+    settings = get_settings()
+    queue_cfg = getattr(settings, "queue", None)
+    connection_string = None
+    queue_name = None
+    if queue_cfg:
+        connection_string = queue_cfg.connection_string or settings.blob_storage.connection_string
+        queue_name = queue_cfg.queue_name
+    if connection_string and queue_name:
+        return AzureMeetingImportQueue(
+            connection_string=connection_string,
+            queue_name=queue_name,
+        )
+    logger.warning("Azure queue configuration missing; falling back to in-process queue")
     use_case = get_extract_use_case()
     return BackgroundMeetingImportQueue(use_case.process_job)
+
+
+@lru_cache(maxsize=1)
+def get_meeting_queue_worker() -> AzureQueueWorker | None:
+    settings = get_settings()
+    queue_cfg = getattr(settings, "queue", None)
+    if not queue_cfg:
+        return None
+    connection_string = queue_cfg.connection_string or settings.blob_storage.connection_string
+    queue_name = queue_cfg.queue_name
+    if not connection_string or not queue_name:
+        return None
+    use_case = get_extract_use_case()
+    client = _ensure_queue_client(connection_string, queue_name)
+    return AzureQueueWorker(
+        queue_client=client,
+        handler=use_case.process_job,
+        visibility_timeout=queue_cfg.visibility_timeout,
+        poll_interval_seconds=queue_cfg.poll_interval_seconds,
+        max_batch_size=queue_cfg.max_batch_size,
+    )
 
 
 @lru_cache(maxsize=1)

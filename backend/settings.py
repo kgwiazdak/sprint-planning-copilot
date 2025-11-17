@@ -57,6 +57,29 @@ class JiraSettings(BaseModel):
     story_points_field: str | None = None
 
 
+class QueueSettings(BaseModel):
+    connection_string: str | None = None
+    queue_name: str | None = None
+    visibility_timeout: int = 300
+    poll_interval_seconds: float = 2.0
+    max_batch_size: int = 16
+
+
+class AzureADSettings(BaseModel):
+    tenant_id: str | None = None
+    client_id: str | None = None
+    audience: str | None = None
+    issuer: str | None = None
+    jwks_url: str | None = None
+    jwks: str | None = None
+    scopes: list[str] = []
+    require_auth: bool = False
+
+    @property
+    def enabled(self) -> bool:
+        return bool((self.tenant_id and self.client_id) or self.require_auth)
+
+
 class AppConfig(BaseModel):
     profile: str = "prod"
     blob_storage: BlobStorageSettings = BlobStorageSettings()
@@ -66,6 +89,8 @@ class AppConfig(BaseModel):
     cosmos: CosmosSettings = CosmosSettings()
     mock_audio: MockAudioSettings = MockAudioSettings()
     jira: JiraSettings = JiraSettings()
+    queue: QueueSettings = QueueSettings()
+    azure_ad: AzureADSettings = AzureADSettings()
 
     @classmethod
     def load(cls) -> "AppConfig":
@@ -121,6 +146,23 @@ class AppConfig(BaseModel):
                 api_token=os.getenv("JIRA_API_TOKEN"),
                 project_key=os.getenv("JIRA_PROJECT_KEY"),
                 story_points_field=os.getenv("JIRA_STORY_POINTS_FIELD"),
+            ),
+            queue=QueueSettings(
+                connection_string=os.getenv("AZURE_STORAGE_QUEUE_CONNECTION_STRING", os.getenv("AZURE_STORAGE_CONNECTION_STRING")),
+                queue_name=os.getenv("AZURE_STORAGE_QUEUE_NAME"),
+                visibility_timeout=int(os.getenv("MEETING_QUEUE_VISIBILITY_TIMEOUT", "300")),
+                poll_interval_seconds=float(os.getenv("MEETING_QUEUE_POLL_INTERVAL", "2.0")),
+                max_batch_size=int(os.getenv("MEETING_QUEUE_MAX_BATCH", "16")),
+            ),
+            azure_ad=AzureADSettings(
+                tenant_id=os.getenv("AZURE_AD_TENANT_ID"),
+                client_id=os.getenv("AZURE_AD_CLIENT_ID"),
+                audience=os.getenv("AZURE_AD_AUDIENCE"),
+                issuer=os.getenv("AZURE_AD_ISSUER"),
+                jwks_url=os.getenv("AZURE_AD_JWKS_URL"),
+                jwks=os.getenv("AZURE_AD_JWKS"),
+                scopes=[scope.strip() for scope in os.getenv("AZURE_AD_SCOPES", "").split(",") if scope.strip()],
+                require_auth=os.getenv("AZURE_AD_REQUIRE_AUTH", "false").lower() in {"1", "true", "yes", "on"},
             ),
         )
 

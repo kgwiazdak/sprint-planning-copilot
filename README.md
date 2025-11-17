@@ -52,6 +52,8 @@ Create `.env` (backend) and `.env.development` (frontend). Key variables:
 | --- | --- |
 | Runtime profile | `APP_PROFILE` (`prod` or `dev`), `VITE_APP_PROFILE` for the frontend |
 | Azure Blob uploads | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`, `AZURE_STORAGE_CONTAINER_WORKERS` (intro voices) |
+| Background queue | `AZURE_STORAGE_QUEUE_NAME`, `AZURE_STORAGE_QUEUE_CONNECTION_STRING` (defaults to blob connection), `MEETING_QUEUE_VISIBILITY_TIMEOUT`, `MEETING_QUEUE_POLL_INTERVAL`, `MEETING_QUEUE_MAX_BATCH` |
+| Authentication | `AZURE_AD_TENANT_ID`, `AZURE_AD_CLIENT_ID`, `AZURE_AD_AUDIENCE`, `AZURE_AD_SCOPES`, `AZURE_AD_JWKS_URL`/`AZURE_AD_JWKS` (optional), `AZURE_AD_REQUIRE_AUTH` |
 | Azure Speech | `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`, `AZURE_SPEECH_LANGUAGE`, `TRANSCRIBER_SAMPLE_RATE` |
 | LLM extraction | `LLM_PROVIDER`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, `OPENAI_MODEL`, `LLM_TEMPERATURE`, `MOCK_LLM=1` (local stub) |
 | Database | `DB_PROVIDER` (`sqlite` or `cosmos`), `DB_URL` (only for SQLite) |
@@ -59,9 +61,11 @@ Create `.env` (backend) and `.env.development` (frontend). Key variables:
 | Mock audio (dev only) | `ENABLE_MOCK_AUDIO`, `MOCK_AUDIO_BLOB_PATH`, `MOCK_AUDIO_LOCAL_DIR`, `MOCK_AUDIO_LOCAL_FILENAME` |
 | Jira push | `JIRA_BASE_URL` (e.g. `https://importantwork.atlassian.net`), `JIRA_PROJECT_KEY` (e.g. `SCRUM`), `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_STORY_POINTS_FIELD` (custom field id, optional) |
 | Telemetry | `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME` |
-| Frontend | `.env.development` → `VITE_API_URL=http://localhost:8000/api` |
+| Frontend | `.env.development` → `VITE_API_URL=http://localhost:8000/api`, `VITE_AZURE_AD_CLIENT_ID`, `VITE_AZURE_AD_TENANT_ID`, `VITE_AZURE_AD_SCOPES` |
 
 CORS reminder: allow `http://localhost:4173` for `PUT,OPTIONS` in your Azure Blob container so browser uploads succeed.
+
+> **Authentication:** When Azure AD variables are provided, every FastAPI route now enforces bearer tokens issued for your tenant. The React app uses MSAL to acquire tokens silently; populate the matching `VITE_AZURE_AD_*` variables so the UI can sign users in.
 
 ## Development Setup
 
@@ -71,6 +75,8 @@ CORS reminder: allow `http://localhost:4173` for `PUT,OPTIONS` in your Azure Blo
 poetry install --with dev
 cp .env.sample .env  # then edit values described above
 poetry run uvicorn backend.app:app --reload
+# Start the background worker (Azure queue → ExtractMeetingUseCase)
+poetry run python -m backend.worker
 ```
 
 ### Frontend
@@ -92,7 +98,7 @@ Run the full stack (API, MLflow, Nginx-served frontend):
 docker compose up --build
 ```
 
-Ports: API `8000`, MLflow `5000`, frontend `4173`. The frontend container proxies API calls to `/api`.
+Ports: API `8000`, MLflow `5000`, frontend `4173`. A dedicated `worker` service now runs `backend.worker` so Azure Storage Queue jobs drain automatically, and the frontend container proxies API calls to `/api`.
 
 ## Typical Workflow
 
@@ -111,7 +117,7 @@ Ports: API `8000`, MLflow `5000`, frontend `4173`. The frontend container proxie
 ## Telemetry & Storage
 
 - SQLite lives at `app.db` by default; schema migrations are handled automatically at startup.
-- MLflow artifacts land under `data/mlflow/artifacts/…`. Keep the MLflow service running (docker compose does this automatically) to inspect past runs.
+- MLflow artifacts land under the `/mlflow` prefix of your configured Azure Blob container (set automatically via `MLFLOW_DEFAULT_ARTIFACT_ROOT`). Keep the MLflow service running (docker compose does this automatically) to inspect past runs.
 
 ## Testing
 

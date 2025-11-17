@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import datetime
+import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
 import asyncio
 
+from backend import audit
 from backend.domain.entities import MeetingImportJob
 from backend.domain.ports import (
     BlobStoragePort,
@@ -56,6 +58,7 @@ class ExtractMeetingUseCase:
         self._extractor = extractor
         self._meetings_repo = meetings_repo
         self._telemetry = telemetry
+        self._worker_actor = os.getenv("MEETING_WORKER_ACTOR", "meeting-worker")
         if audio_extensions is not None:
             self._audio_extensions = audio_extensions
         elif transcription is not None:
@@ -64,13 +67,17 @@ class ExtractMeetingUseCase:
             self._audio_extensions = tuple()
 
     async def process_job(self, job: MeetingImportJob) -> None:
-        await self(
-            title=job.title,
-            started_at=job.started_at,
-            blob_url=job.blob_url,
-            original_filename=job.original_filename,
-            meeting_id=job.meeting_id,
-        )
+        token = audit.bind_actor(f"{self._worker_actor}:{job.meeting_id}")
+        try:
+            await self(
+                title=job.title,
+                started_at=job.started_at,
+                blob_url=job.blob_url,
+                original_filename=job.original_filename,
+                meeting_id=job.meeting_id,
+            )
+        finally:
+            audit.reset_actor(token)
 
     async def __call__(
         self,

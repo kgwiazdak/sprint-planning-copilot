@@ -41,3 +41,14 @@ services:
       - "4173:4173"
     depends_on:
       - api
+
+  worker:
+    build: .
+    command: ["python", "-m", "backend.worker"]
+    env_file:
+      - .env
+    environment:
+      MLFLOW_TRACKING_URI: ${MLFLOW_TRACKING_URI:-http://mlflow:5000}
+      MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-ai-scrum-copilot-mvp}
+    depends_on:
+      - api

@@ -26,10 +26,15 @@ from backend.presentation.http.dependencies import (
     submit_import_command,
     worker_blob_storage_service,
 )
+from backend.presentation.http.security import require_authenticated_user
 from backend.settings import get_settings
 from backend.container import get_mock_audio_path
 
-router = APIRouter(prefix="/api", tags=["ui"])
+router = APIRouter(
+    prefix="/api",
+    tags=["ui"],
+    dependencies=[Depends(require_authenticated_user)],
+)
 logger = logging.getLogger(__name__)
 
 

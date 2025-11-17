@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from backend.audit import log_mlflow_access
 from backend.domain.ports import TelemetryPort
 from backend.mlflow_logging import log_extraction_run, logger
 from backend.schemas import ExtractionResult
@@ -19,6 +20,7 @@ class MLflowTelemetryAdapter(TelemetryPort):
         transcript_blob_uri: str | None,
     ) -> None:
         try:
+            log_mlflow_access("log_run", meeting_id=meeting_id, run_id=run_id)
             log_extraction_run(
                 meeting_id=meeting_id,
                 run_id=run_id,

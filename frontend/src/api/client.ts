@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { resolveAuthToken } from './authToken';
 
 const normalizeBase = (url: string) => {
   if (url === '/') {
@@ -11,6 +12,15 @@ const baseURL = normalizeBase(import.meta.env.VITE_API_URL ?? '/api');
 
 export const apiClient = axios.create({
   baseURL,
+});
+
+apiClient.interceptors.request.use(async (config) => {
+  const token = await resolveAuthToken();
+  if (token) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 apiClient.interceptors.response.use(
