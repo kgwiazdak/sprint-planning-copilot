@@ -71,3 +71,11 @@ def test_store_tasks_only_assigns_known_voice(tmp_path):
     assigned = {task["summary"]: task["assigneeId"] for task in tasks}
     assert assigned["Implement auth"] is not None
     assert assigned["Unknown task"] is None
+
+
+def test_update_user_voice_sample(tmp_path):
+    repo = _repo(tmp_path)
+    user_id = repo.register_voice_profile(display_name="Carla Ruiz", voice_sample_path="data/voices/carla.mp3")
+    repo.update_user_voice_sample(user_id, "Carla Ruiz", "data/voices/carla_new.mp3")
+    users = repo.list_users()
+    assert users[0]["voiceSamplePath"] == "data/voices/carla_new.mp3"

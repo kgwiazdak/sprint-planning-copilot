@@ -515,6 +515,24 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         finally:
             conn.close()
 
+    def update_user_voice_sample(self, user_id: str, display_name: str, voice_sample_path: str) -> str:
+        normalized = display_name.strip()
+        if not normalized:
+            raise ValueError("display_name is required")
+        conn = self._db.connect()
+        try:
+            row = conn.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+            if not row:
+                raise ValueError("User not found")
+            conn.execute(
+                "UPDATE users SET display_name = ?, voice_sample_path = ? WHERE id = ?",
+                (normalized, voice_sample_path, user_id),
+            )
+            conn.commit()
+            return user_id
+        finally:
+            conn.close()
+
     def _find_user_id_by_name(self, conn: sqlite3.Connection, display_name: str) -> str | None:
         row = conn.execute(
             "SELECT id FROM users WHERE lower(display_name) = lower(?)",

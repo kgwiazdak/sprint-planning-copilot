@@ -9,6 +9,7 @@ from backend.infrastructure.jira import JiraClient
 from backend.infrastructure.storage.blob import BlobStorageService
 from backend.container import (
     get_blob_storage,
+    get_worker_blob_storage,
     get_extract_use_case,
     get_jira_client,
     get_meeting_queue,
@@ -28,6 +29,13 @@ def blob_storage_service() -> BlobStorageService:
     storage = get_blob_storage()
     if storage is None:
         raise RuntimeError("Blob storage is not configured.")
+    return storage
+
+
+def worker_blob_storage_service() -> BlobStorageService:
+    storage = get_worker_blob_storage()
+    if storage is None:
+        raise RuntimeError("Worker blob storage is not configured.")
     return storage
 
 

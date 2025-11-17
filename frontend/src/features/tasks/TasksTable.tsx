@@ -285,7 +285,22 @@ export const TasksTable = ({
       paginationModel={paginationModel}
       onPaginationModelChange={setPaginationModel}
       pageSizeOptions={[10, 20, 50]}
-      sx={{ backgroundColor: 'background.paper' }}
+      sx={(theme) => ({
+        backgroundColor: 'transparent',
+        border: 'none',
+        borderRadius: 3,
+        '.MuiDataGrid-columnHeaders': {
+          backgroundColor:
+            theme.palette.mode === 'light'
+              ? 'rgba(15,23,42,0.03)'
+              : 'rgba(255,255,255,0.03)',
+          borderBottom: 'none',
+          borderRadius: 16,
+        },
+        '.MuiDataGrid-cell': {
+          borderBottom: `1px solid ${theme.palette.divider}`,
+        },
+      })}
       onRowDoubleClick={(params) =>
         onRowDoubleClick?.(params.row as Task)
       }

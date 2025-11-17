@@ -400,6 +400,19 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         )
         return user_id
 
+    def update_user_voice_sample(self, user_id: str, display_name: str, voice_sample_path: str) -> str:
+        normalized = display_name.strip()
+        if not normalized:
+            raise ValueError("display_name is required")
+        try:
+            doc = self._users.read_item(item=user_id, partition_key=user_id)
+        except exceptions.CosmosResourceNotFoundError:
+            raise ValueError("User not found") from None
+        doc["displayName"] = normalized
+        doc["voiceSamplePath"] = voice_sample_path
+        self._users.upsert_item(doc)
+        return user_id
+
     # --- Helpers ---------------------------------------------------------
 
     def _serialize_meeting(self, item: dict[str, Any], draft_count: int) -> dict[str, Any]:

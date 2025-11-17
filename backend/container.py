@@ -35,11 +35,27 @@ def get_blob_storage() -> BlobStorageService | None:
 
 
 @lru_cache(maxsize=1)
+def get_worker_blob_storage() -> BlobStorageService | None:
+    cfg = get_settings().blob_storage
+    if not cfg.container_workers_name or not cfg.connection_string:
+        return None
+    return BlobStorageService(
+        container_name=cfg.container_workers_name,
+        connection_string=cfg.connection_string,
+    )
+
+
+@lru_cache(maxsize=1)
 def get_transcriber() -> AzureConversationTranscriber | None:
     cfg = get_settings().azure_speech
     if not cfg.key or not cfg.region:
         return None
     intro_dir = _ensure_intro_samples_dir()
+    if get_settings().mock_audio.enabled:
+        try:
+            get_mock_audio_path()
+        except Exception:  # pragma: no cover - defensive
+            logger.debug("Mock audio ensure failed during transcriber init.", exc_info=True)
     return AzureConversationTranscriber(
         key=cfg.key,
         region=cfg.region,
@@ -139,3 +155,36 @@ def _ensure_intro_samples_dir() -> Path:
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Failed to synchronize intro samples: %s", exc)
     return target
+
+
+@lru_cache(maxsize=1)
+def get_mock_audio_path() -> Path | None:
+    settings = get_settings()
+    mock_cfg = settings.mock_audio
+    if not mock_cfg.enabled:
+        return None
+    local_dir = Path(mock_cfg.local_dir or "data")
+    local_dir.mkdir(parents=True, exist_ok=True)
+    filename = mock_cfg.local_filename or Path(mock_cfg.blob_path).name
+    target = local_dir / filename
+    if target.exists():
+        return target
+    storage = get_blob_storage()
+    if storage is None:
+        logger.warning("Mock audio enabled but blob storage is not configured.")
+        return None
+    try:
+        data = storage.download_blob_by_name_sync(mock_cfg.blob_path)
+        target.write_bytes(data)
+        logger.info("Downloaded mock audio sample to %s", target)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Failed to download mock audio '%s': %s", mock_cfg.blob_path, exc)
+        return None
+    return target
+
+
+if get_settings().mock_audio.enabled:
+    try:
+        get_mock_audio_path()
+    except Exception:  # pragma: no cover - defensive
+        logger.debug("Initial mock audio fetch failed.", exc_info=True)

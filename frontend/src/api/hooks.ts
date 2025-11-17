@@ -76,6 +76,33 @@ export const useUsers = () =>
     queryFn: fetchUsers,
   });
 
+type UploadVoiceInput = {
+  file: File;
+  displayName: string;
+  userId?: string;
+};
+
+export const useUploadVoiceSample = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, displayName, userId }: UploadVoiceInput) => {
+      const data = new FormData();
+      data.append('displayName', displayName);
+      if (userId) {
+        data.append('userId', userId);
+      }
+      data.append('file', file);
+      const response = await apiClient.post('/users/voice', data, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.users() });
+    },
+  });
+};
+
 type CreateMeetingInput = {
   title: string;
   startedAt: string;

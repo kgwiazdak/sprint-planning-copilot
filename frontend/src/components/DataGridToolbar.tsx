@@ -2,6 +2,7 @@ import {
   Badge,
   Box,
   Button,
+  Paper,
   Stack,
   TextField,
   ToggleButton,
@@ -40,11 +41,22 @@ export const DataGridToolbar = ({
   onSearchChange,
 }: DataGridToolbarProps) => (
   <Stack
+    component={Paper}
+    elevation={0}
     spacing={2}
-    direction={{ xs: 'column', sm: 'row' }}
-    alignItems={{ xs: 'stretch', sm: 'center' }}
+    direction={{ xs: 'column', md: 'row' }}
+    alignItems={{ xs: 'stretch', md: 'center' }}
     justifyContent="space-between"
-    sx={{ mb: 2 }}
+    sx={(theme) => ({
+      mb: 3,
+      p: { xs: 2, md: 2.5 },
+      borderRadius: 3,
+      border: `1px solid ${theme.palette.divider}`,
+      background:
+        theme.palette.mode === 'light'
+          ? 'linear-gradient(135deg, rgba(15,23,42,0.02), rgba(37,99,235,0.08))'
+          : 'linear-gradient(135deg, rgba(15,23,42,0.85), rgba(15,118,225,0.15))',
+    })}
   >
     <Stack spacing={1} direction="row" alignItems="center">
       {title && (
@@ -60,9 +72,9 @@ export const DataGridToolbar = ({
       />
     </Stack>
     <Stack
-      direction={{ xs: 'column', sm: 'row' }}
+      direction={{ xs: 'column', md: 'row' }}
       spacing={1}
-      alignItems={{ xs: 'stretch', sm: 'center' }}
+      alignItems={{ xs: 'stretch', md: 'center' }}
       flexGrow={1}
       justifyContent="flex-end"
     >
@@ -72,6 +84,7 @@ export const DataGridToolbar = ({
           placeholder="Search"
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
+          sx={{ minWidth: { xs: '100%', md: 220 } }}
         />
       )}
       {onStatusFilterChange && (
@@ -89,7 +102,7 @@ export const DataGridToolbar = ({
         </ToggleButtonGroup>
       )}
       {(onApproveAll || onRejectAll) && (
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={1} flexWrap="wrap">
           {onRejectAll && (
             <Button variant="text" color="inherit" onClick={onRejectAll}>
               Reject All
@@ -103,7 +116,7 @@ export const DataGridToolbar = ({
         </Box>
       )}
       {(onApproveSelected || onRejectSelected) && (
-        <Box display="flex" gap={1}>
+        <Box display="flex" gap={1} flexWrap="wrap">
           {onRejectSelected && (
             <Button
               variant="outlined"

@@ -84,6 +84,15 @@ class BlobStorageService:
         blob_url = await asyncio.to_thread(self._upload_bytes, blob_name, content, content_type)
         return blob_url
 
+    async def upload_blob(
+        self,
+        *,
+        blob_name: str,
+        content: bytes,
+        content_type: Optional[str],
+    ) -> str:
+        return await asyncio.to_thread(self._upload_bytes, blob_name, content, content_type)
+
     def _upload_bytes(self, blob_name: str, data: bytes, content_type: Optional[str]) -> str:
         blob_client = self._container_client.get_blob_client(blob=blob_name)
         try:
@@ -130,6 +139,9 @@ class BlobStorageService:
     async def download_blob(self, blob_url: str) -> bytes:
         blob_name = self._extract_blob_name(blob_url)
         return await asyncio.to_thread(self._download_bytes, blob_name)
+
+    def download_blob_by_name_sync(self, blob_name: str) -> bytes:
+        return self._download_bytes(blob_name)
 
     def _download_bytes(self, blob_name: str) -> bytes:
         blob_client = self._container_client.get_blob_client(blob=blob_name)

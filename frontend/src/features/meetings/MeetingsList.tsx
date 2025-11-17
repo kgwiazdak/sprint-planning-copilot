@@ -36,6 +36,7 @@ import { MeetingUpdateSchema } from '../../schemas/meeting';
 import type { MeetingUpdateValues } from '../../schemas/meeting';
 import type { Meeting, MeetingStatus } from '../../types';
 import { formatDateTime, toDateTimeInput } from '../../utils/format';
+import { PageHeader } from '../../components/PageHeader';
 
 export const MeetingsList = () => {
   const navigate = useNavigate();
@@ -109,6 +110,20 @@ export const MeetingsList = () => {
     [meetings],
   );
 
+  const overviewStats = useMemo(() => {
+    const active = meetings.filter((meeting) =>
+      ['queued', 'processing'].includes(meeting.status),
+    ).length;
+    const done = meetings.filter((meeting) => meeting.status === 'completed').length;
+    const failed = meetings.filter((meeting) => meeting.status === 'failed').length;
+    const draftTasks = meetings.reduce(
+      (total, meeting) => total + meeting.draftTaskCount,
+      0,
+    );
+    const lastRun = sortedMeetings[0]?.startedAt;
+    return { active, done, failed, draftTasks, lastRun };
+  }, [meetings, sortedMeetings]);
+
   if (isError) {
     return (
       <Alert
@@ -126,24 +141,69 @@ export const MeetingsList = () => {
 
   return (
     <Box>
-      <Stack direction="row" justifyContent="space-between" mb={3}>
-        <div>
-          <Typography variant="h5" fontWeight={600}>
-            Meetings
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Track ingestion status and draft counts
-          </Typography>
-        </div>
-        <Button
-          variant="contained"
-          onClick={() => navigate('/meetings/new')}
-        >
-          New meeting
-        </Button>
+      <PageHeader
+        eyebrow="Meeting ingestion"
+        title="Meetings"
+        subtitle="Follow each import as it flows through blob storage, transcription, and task extraction."
+        actions={
+          <Button variant="contained" onClick={() => navigate('/meetings/new')}>
+            New meeting
+          </Button>
+        }
+      />
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={2}
+        flexWrap="wrap"
+        mb={3}
+      >
+        {[
+          {
+            label: 'In flight',
+            value: overviewStats.active || '—',
+            helper: 'Queued or processing',
+          },
+          {
+            label: 'Completed',
+            value: overviewStats.done || '—',
+            helper: 'Ready for review',
+          },
+          {
+            label: 'Draft tasks',
+            value: overviewStats.draftTasks || '—',
+            helper: 'Awaiting approval',
+          },
+          {
+            label: 'Last import',
+            value: overviewStats.lastRun
+              ? formatDateTime(overviewStats.lastRun)
+              : '—',
+            helper: 'Most recent start time',
+          },
+        ].map((stat) => (
+          <Paper
+            key={stat.label}
+            elevation={0}
+            sx={{
+              p: 2.5,
+              borderRadius: 3,
+              flex: { xs: '1 1 100%', md: '1 1 25%' },
+            }}
+          >
+            <Typography variant="overline" color="text.secondary">
+              {stat.label}
+            </Typography>
+            <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
+              {stat.value}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {stat.helper}
+            </Typography>
+          </Paper>
+        ))}
       </Stack>
-      <Paper>
-        <Table>
+      <Paper sx={{ borderRadius: 3, overflowX: 'auto' }}>
+        <Table size="small">
           <TableHead>
             <TableRow>
               <TableCell>Title</TableCell>
@@ -188,15 +248,19 @@ export const MeetingsList = () => {
                         </Button>
                         <IconButton
                           aria-label="Edit meeting"
+                          color="inherit"
                           onClick={() => setEditingMeeting(meeting)}
+                          size="small"
                         >
-                          <EditIcon />
+                          <EditIcon fontSize="small" />
                         </IconButton>
                         <IconButton
                           aria-label="Delete meeting"
+                          color="inherit"
                           onClick={() => setConfirmTarget(meeting)}
+                          size="small"
                         >
-                          <DeleteIcon />
+                          <DeleteIcon fontSize="small" />
                         </IconButton>
                       </Stack>
                     </TableCell>

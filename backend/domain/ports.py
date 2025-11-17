@@ -84,6 +84,9 @@ class MeetingsRepositoryPort(Protocol):
     def register_voice_profile(self, *, display_name: str, voice_sample_path: str | None = None) -> str:
         """Ensure a speaker profile exists."""
 
+    def update_user_voice_sample(self, user_id: str, display_name: str, voice_sample_path: str) -> str:
+        """Update an existing speaker profile with a new sample."""
+
     def get_user(self, user_id: str) -> dict[str, Any] | None:
         """Fetch user by ID."""
 

@@ -42,6 +42,13 @@ class CosmosSettings(BaseModel):
     runs_container: str = os.getenv("COSMOS_RUNS_CONTAINER", "extraction_runs")
 
 
+class MockAudioSettings(BaseModel):
+    enabled: bool = False
+    blob_path: str = "mock/team_meeting.mp3"
+    local_dir: str = "data"
+    local_filename: str | None = None
+
+
 class JiraSettings(BaseModel):
     base_url: str | None = None
     email: str | None = None
@@ -51,16 +58,25 @@ class JiraSettings(BaseModel):
 
 
 class AppConfig(BaseModel):
+    profile: str = "prod"
     blob_storage: BlobStorageSettings = BlobStorageSettings()
     azure_speech: AzureSpeechSettings = AzureSpeechSettings()
     llm: LLMSettings = LLMSettings()
     database: DatabaseSettings = DatabaseSettings()
     cosmos: CosmosSettings = CosmosSettings()
+    mock_audio: MockAudioSettings = MockAudioSettings()
     jira: JiraSettings = JiraSettings()
 
     @classmethod
     def load(cls) -> "AppConfig":
+        profile = os.getenv("APP_PROFILE", "prod").lower()
+        mock_enabled_env = os.getenv("ENABLE_MOCK_AUDIO")
+        if mock_enabled_env is None:
+            mock_enabled = profile == "dev"
+        else:
+            mock_enabled = mock_enabled_env.lower() in {"1", "true", "yes", "on"}
         return cls(
+            profile=profile,
             blob_storage=BlobStorageSettings(
                 container_name=os.getenv("AZURE_STORAGE_CONTAINER_NAME"),
                 container_workers_name=os.getenv("AZURE_STORAGE_CONTAINER_WORKERS"),
@@ -92,6 +108,12 @@ class AppConfig(BaseModel):
                 tasks_container=os.getenv("COSMOS_TASKS_CONTAINER", "tasks"),
                 users_container=os.getenv("COSMOS_USERS_CONTAINER", "users"),
                 runs_container=os.getenv("COSMOS_RUNS_CONTAINER", "extraction_runs"),
+            ),
+            mock_audio=MockAudioSettings(
+                enabled=mock_enabled,
+                blob_path=os.getenv("MOCK_AUDIO_BLOB_PATH", "mock/team_meeting.mp3"),
+                local_dir=os.getenv("MOCK_AUDIO_LOCAL_DIR", "data"),
+                local_filename=os.getenv("MOCK_AUDIO_LOCAL_FILENAME"),
             ),
             jira=JiraSettings(
                 base_url=os.getenv("JIRA_BASE_URL"),

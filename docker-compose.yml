@@ -36,6 +36,7 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: ${VITE_FRONTEND_API_URL:-/api}
+        VITE_APP_PROFILE: ${APP_PROFILE:-prod}
     ports:
       - "4173:4173"
     depends_on:

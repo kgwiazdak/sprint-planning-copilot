@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
+import os
+import re
+import unicodedata
 import uuid
 from datetime import datetime
-import logging
+from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from backend.application.commands.meeting_import import MeetingImportPayload, SubmitMeetingImportCommand
@@ -19,7 +24,10 @@ from backend.presentation.http.dependencies import (
     data_repository,
     jira_client as jira_dependency,
     submit_import_command,
+    worker_blob_storage_service,
 )
+from backend.settings import get_settings
+from backend.container import get_mock_audio_path
 
 router = APIRouter(prefix="/api", tags=["ui"])
 logger = logging.getLogger(__name__)
@@ -50,6 +58,13 @@ class TaskUpdate(BaseModel):
 
 class BulkAction(BaseModel):
     ids: list[str] = Field(default_factory=list)
+
+
+class VoiceUploadResponse(BaseModel):
+    userId: str
+    displayName: str
+    voiceSamplePath: str | None = None
+    blobUrl: str | None = None
 
 
 class BlobUploadRequest(BaseModel):
@@ -180,6 +195,59 @@ def list_users(repo: MeetingsRepositoryPort = Depends(_repo)):
     return repo.list_users()
 
 
+@router.post("/users/voice", response_model=VoiceUploadResponse, status_code=201)
+async def upload_voice_sample(
+    displayName: str = Form(..., min_length=1),
+    file: UploadFile = File(...),
+    userId: str | None = Form(default=None),
+    repo: MeetingsRepositoryPort = Depends(_repo),
+    worker_storage: BlobStorageService = Depends(worker_blob_storage_service),
+):
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Audio file is empty.")
+    slug = _slugify_name(displayName)
+    ext = Path(file.filename or "").suffix.lower()
+    if not ext or len(ext) > 5:
+        ext = ".mp3"
+    filename = f"intro_{slug}{ext}"
+    voices_dir = Path(os.getenv("INTRO_AUDIO_DIR", "data/voices"))
+    voices_dir.mkdir(parents=True, exist_ok=True)
+    local_path = voices_dir / filename
+    local_path.write_bytes(payload)
+    blob_url = await worker_storage.upload_blob(
+        blob_name=filename,
+        content=payload,
+        content_type=file.content_type or "audio/mpeg",
+    )
+    try:
+        if userId:
+            repo.update_user_voice_sample(userId, displayName, str(local_path))
+            final_user_id = userId
+        else:
+            final_user_id = repo.register_voice_profile(display_name=displayName, voice_sample_path=str(local_path))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    user = repo.get_user(final_user_id)
+    return VoiceUploadResponse(
+        userId=final_user_id,
+        displayName=user["displayName"] if user else displayName,
+        voiceSamplePath=str(local_path),
+        blobUrl=blob_url,
+    )
+
+
+@router.get("/mock/audio")
+def download_mock_audio():
+    settings = get_settings()
+    if not settings.mock_audio.enabled:
+        raise HTTPException(status_code=404, detail="Mock audio disabled.")
+    path = get_mock_audio_path()
+    if not path or not path.exists():
+        raise HTTPException(status_code=503, detail="Mock audio unavailable.")
+    return FileResponse(path, filename=path.name, media_type="audio/mpeg")
+
+
 @router.post("/uploads/blob", response_model=BlobUploadResponse)
 def create_blob_upload(
     payload: BlobUploadRequest,
@@ -219,3 +287,10 @@ async def import_meeting(
         )
     )
     return {"meetingId": meeting_id, "status": "queued"}
+
+
+def _slugify_name(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", value or "").strip().lower()
+    slug = re.sub(r"[^\w]+", "_", normalized, flags=re.UNICODE)
+    slug = slug.strip("_")
+    return slug or "speaker"

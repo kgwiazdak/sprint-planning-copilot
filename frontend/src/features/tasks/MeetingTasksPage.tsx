@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, Box, Button, Paper, Stack } from '@mui/material';
+import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import {
@@ -12,7 +12,9 @@ import {
 import { TasksTable } from './TasksTable';
 import { DataGridToolbar } from '../../components/DataGridToolbar';
 import { TaskDrawer } from '../../components/TaskDrawer';
-import type { TaskStatus } from '../../types';
+import type { MeetingStatus, TaskStatus } from '../../types';
+import { PageHeader } from '../../components/PageHeader';
+import { formatDateTime } from '../../utils/format';
 
 type StatusFilter = TaskStatus | 'all';
 
@@ -90,10 +92,79 @@ export const MeetingTasksPage = () => {
     );
   }
 
+  const getStatusColor = (status: MeetingStatus) => {
+    switch (status) {
+      case 'completed':
+        return 'success';
+      case 'processing':
+        return 'info';
+      case 'failed':
+        return 'error';
+      default:
+        return 'default';
+    }
+  };
+
   return (
     <Box>
+      <PageHeader
+        eyebrow="Meeting review"
+        title={meeting ? meeting.title : 'Meeting tasks'}
+        subtitle={
+          meeting
+            ? `Started ${formatDateTime(meeting.startedAt)} · Status: ${meeting.status}`
+            : 'Review extracted tasks for the selected meeting.'
+        }
+        actions={
+          <Button variant="text" onClick={() => navigate('/meetings')}>
+            Back to meetings
+          </Button>
+        }
+      />
+      {meeting && (
+        <Paper
+          sx={{
+            p: 3,
+            mb: 3,
+            borderRadius: 3,
+          }}
+        >
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={3}
+            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            justifyContent="space-between"
+          >
+            <Stack spacing={0.5}>
+              <Typography variant="overline" color="text.secondary">
+                Meeting metadata
+              </Typography>
+              <Typography variant="body1">{meeting.id}</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {formatDateTime(meeting.startedAt)}
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={3}>
+              <Stack spacing={0.5}>
+                <Typography variant="overline" color="text.secondary">
+                  Draft tasks
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {meeting.draftTaskCount ?? 0}
+                </Typography>
+              </Stack>
+              <Stack spacing={0.5}>
+                <Typography variant="overline" color="text.secondary">
+                  Status
+                </Typography>
+                <Chip label={meeting.status} color={getStatusColor(meeting.status)} />
+              </Stack>
+            </Stack>
+          </Stack>
+        </Paper>
+      )}
       <DataGridToolbar
-        title={meeting ? `${meeting.title} tasks` : 'Meeting tasks'}
+        title="Selection"
         selectionCount={selectedIds.length}
         onApproveSelected={() =>
           handleBulkAction(selectedIds, approveTasks, 'Tasks approved')
@@ -107,7 +178,7 @@ export const MeetingTasksPage = () => {
         search={search}
         onSearchChange={setSearch}
       />
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: { xs: 1, md: 2 }, borderRadius: 3 }}>
         <TasksTable
           tasks={filteredTasks}
           users={users}
@@ -126,9 +197,6 @@ export const MeetingTasksPage = () => {
           }
         >
           Edit task
-        </Button>
-        <Button variant="text" onClick={() => navigate('/meetings')}>
-          Back to meetings
         </Button>
       </Stack>
       <TaskDrawer

@@ -25,7 +25,7 @@ class AzureConversationTranscriber:
         sample_rate: int = 16000,
         channels: int = 1,
         intro_audio_dir: str | Path | None = None,
-        intro_pattern: str = "intro_*.mp3",
+        intro_pattern: str = "intro_*.*",
         intro_silence_ms: int = 300,
     ) -> None:
         if not key or not region:
@@ -37,7 +37,7 @@ class AzureConversationTranscriber:
         self._sample_rate = sample_rate
         self._channels = channels
         self._intro_dir = Path(intro_audio_dir or os.getenv("INTRO_AUDIO_DIR", "data/voices"))
-        self._intro_pattern = intro_pattern or os.getenv("INTRO_AUDIO_PATTERN", "intro_*.mp3")
+        self._intro_pattern = intro_pattern or os.getenv("INTRO_AUDIO_PATTERN", "intro_*.*")
         self._intro_silence_ms = intro_silence_ms or int(os.getenv("INTRO_SILENCE_MS", "300"))
 
         self._speech_config = self._build_speech_config()

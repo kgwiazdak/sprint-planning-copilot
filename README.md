@@ -50,11 +50,13 @@ Create `.env` (backend) and `.env.development` (frontend). Key variables:
 
 | Purpose | Variables |
 | --- | --- |
+| Runtime profile | `APP_PROFILE` (`prod` or `dev`), `VITE_APP_PROFILE` for the frontend |
 | Azure Blob uploads | `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_STORAGE_CONTAINER_NAME`, `AZURE_STORAGE_CONTAINER_WORKERS` (intro voices) |
 | Azure Speech | `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`, `AZURE_SPEECH_LANGUAGE`, `TRANSCRIBER_SAMPLE_RATE` |
 | LLM extraction | `LLM_PROVIDER`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, `OPENAI_MODEL`, `LLM_TEMPERATURE`, `MOCK_LLM=1` (local stub) |
 | Database | `DB_PROVIDER` (`sqlite` or `cosmos`), `DB_URL` (only for SQLite) |
 | Cosmos DB (if enabled) | `COSMOS_ACCOUNT_URI`, `COSMOS_KEY`, `COSMOS_DB_NAME`, `COSMOS_MEETINGS_CONTAINER`, `COSMOS_TASKS_CONTAINER`, `COSMOS_USERS_CONTAINER`, `COSMOS_RUNS_CONTAINER` |
+| Mock audio (dev only) | `ENABLE_MOCK_AUDIO`, `MOCK_AUDIO_BLOB_PATH`, `MOCK_AUDIO_LOCAL_DIR`, `MOCK_AUDIO_LOCAL_FILENAME` |
 | Jira push | `JIRA_BASE_URL` (e.g. `https://importantwork.atlassian.net`), `JIRA_PROJECT_KEY` (e.g. `SCRUM`), `JIRA_EMAIL`, `JIRA_API_TOKEN`, `JIRA_STORY_POINTS_FIELD` (custom field id, optional) |
 | Telemetry | `MLFLOW_TRACKING_URI`, `MLFLOW_EXPERIMENT_NAME` |
 | Frontend | `.env.development` → `VITE_API_URL=http://localhost:8000/api` |
@@ -122,6 +124,8 @@ This exercises ingestion orchestration, MLflow logging, Jira pushing, and the vo
 ### Voice Samples & Diarization
 
 - Store intro clips in the workers container (blobs like `intro_Adrian_Puchacki.mp3`). On startup the backend syncs missing files into `data/voices/` and creates/updates matching user records.
+- You can also upload samples directly from the UI via **Voice Profiles** (`/voices`) — pick or create a user, choose an audio file, and the API saves it both to `data/voices/` and the workers container automatically.
+- When `APP_PROFILE=dev`, the **New Meeting** form also exposes a “Select mock file” button that pulls the preloaded sample (`MOCK_AUDIO_BLOB_PATH`) from `/data`, making it easy to run the flow without recording audio.
 - During transcription, the Azure Conversation transcriber prepends these intros so diarized speakers can be matched to real names. Tasks from matched speakers arrive pre-assigned in the UI; unknown voices stay unassigned until you add a new intro sample.
 - When a teammate joins, drop their intro clip in the workers container, restart the backend to sync, and confirm they show up under `/api/users`. As soon as their Jira account is known (either prefilled or auto-looked-up during approval), tasks will push into Jira under their name.
 

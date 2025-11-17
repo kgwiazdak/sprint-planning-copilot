@@ -11,6 +11,8 @@ import { DataGridToolbar } from '../../components/DataGridToolbar';
 import { TasksTable } from './TasksTable';
 import { TaskDrawer } from '../../components/TaskDrawer';
 import type { TaskStatus } from '../../types';
+import { PageHeader } from '../../components/PageHeader';
+import { useNavigate } from 'react-router-dom';
 
 type StatusFilter = TaskStatus | 'all';
 
@@ -21,6 +23,7 @@ export const ReviewApprovePage = () => {
   const approveTasks = useApproveTasks();
   const rejectTasks = useRejectTasks();
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('draft');
   const [search, setSearch] = useState('');
@@ -78,8 +81,23 @@ export const ReviewApprovePage = () => {
 
   return (
     <Box>
+      <PageHeader
+        eyebrow="Human in the loop"
+        title="Review & approve"
+        subtitle="Spot-check extracted tasks, edit inline, and synchronize only the issues that look right."
+        actions={
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" onClick={() => navigate('/meetings')}>
+              Meeting log
+            </Button>
+            <Button variant="contained" onClick={() => navigate('/meetings/new')}>
+              Import meeting
+            </Button>
+          </Stack>
+        }
+      />
       <DataGridToolbar
-        title="Review & Approve"
+        title="Selection"
         selectionCount={selectedIds.length}
         onApproveSelected={() =>
           handleBulkAction(selectedIds, approveTasks, 'Tasks approved')
@@ -107,7 +125,7 @@ export const ReviewApprovePage = () => {
         search={search}
         onSearchChange={setSearch}
       />
-      <Paper sx={{ p: 2 }}>
+      <Paper sx={{ p: { xs: 1, md: 2 }, borderRadius: 3 }}>
         <TasksTable
           tasks={filteredTasks}
           users={users}

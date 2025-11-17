@@ -1,7 +1,8 @@
-import { Alert, Button, CircularProgress, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Box, Button, CircularProgress, Paper, Stack } from '@mui/material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTask } from '../../api/hooks';
 import { EditTaskForm } from './EditTaskForm';
+import { PageHeader } from '../../components/PageHeader';
 
 export const EditTaskPage = () => {
   const { id = '' } = useParams();
@@ -36,15 +37,24 @@ export const EditTaskPage = () => {
   }
 
   return (
-    <Paper sx={{ p: 4, maxWidth: 720 }}>
-      <Typography variant="h5" mb={2}>
-        Edit task
-      </Typography>
-      <EditTaskForm
-        task={data}
-        onSuccess={() => navigate(-1)}
-        onCancel={() => navigate(-1)}
+    <Box>
+      <PageHeader
+        eyebrow="Task editor"
+        title="Edit task"
+        subtitle={data.summary}
+        actions={
+          <Button variant="text" onClick={() => navigate(-1)}>
+            Back
+          </Button>
+        }
       />
-    </Paper>
+      <Paper sx={{ p: 4, maxWidth: 760 }}>
+        <EditTaskForm
+          task={data}
+          onSuccess={() => navigate(-1)}
+          onCancel={() => navigate(-1)}
+        />
+      </Paper>
+    </Box>
   );
 };
