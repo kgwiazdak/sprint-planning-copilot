@@ -122,6 +122,7 @@ export const VoiceProfilesPage = () => {
                 type="submit"
                 variant="contained"
                 disabled={uploadVoice.isPending}
+                sx={{ flex: 1 }}
               >
                 Upload & sync
               </Button>
@@ -132,6 +133,7 @@ export const VoiceProfilesPage = () => {
                   setDisplayName('');
                   setFile(null);
                 }}
+                sx={{ flex: 1 }}
               >
                 Reset
               </Button>

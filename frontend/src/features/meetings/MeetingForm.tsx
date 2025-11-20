@@ -102,8 +102,8 @@ export const MeetingForm = ({
 
           return (
             <Stack spacing={1}>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button variant="outlined" component="label">
+              <Stack direction="row" spacing={1}>
+                <Button variant="outlined" component="label" sx={{ flex: 1 }}>
                   {value?.name ? 'Change audio file' : 'Upload audio file'}
                   <input
                     type="file"
@@ -122,6 +122,7 @@ export const MeetingForm = ({
                     variant="outlined"
                     onClick={handleMockSelect}
                     disabled={mockLoading}
+                    sx={{ flex: 1 }}
                   >
                     {mockLoading ? 'Loading mock…' : 'Select mock file'}
                   </Button>

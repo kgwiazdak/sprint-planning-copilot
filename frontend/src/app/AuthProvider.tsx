@@ -259,7 +259,7 @@ const SignInGate = ({ children, scopes }: GateProps) => {
           >
             <Stack spacing={3}>
               <Box>
-                <Typography variant="h5" fontWeight={600} gutterBottom>
+                <Typography variant="h5" fontWeight={600} gutterBottom color="white">
                   Sign in to continue
                 </Typography>
                 <Typography variant="body2" color="rgba(226,232,240,0.7)">

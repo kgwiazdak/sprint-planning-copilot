@@ -39,12 +39,6 @@ import type { Meeting, MeetingStatus } from '../../types';
 import { formatDateTime, toDateTimeInput } from '../../utils/format';
 import { PageHeader } from '../../components/PageHeader';
 
-const MEETING_TABLE_HEADER_HEIGHT = 60;
-const MEETING_ROW_HEIGHT = 88;
-const MAX_VISIBLE_MEETINGS = 3;
-const MEETINGS_TABLE_MAX_HEIGHT =
-  MEETING_TABLE_HEADER_HEIGHT + MAX_VISIBLE_MEETINGS * MEETING_ROW_HEIGHT;
-
 export const MeetingsList = () => {
   const navigate = useNavigate();
   const { data: meetings = [], isLoading, isError, refetch } = useMeetings();
@@ -168,9 +162,9 @@ export const MeetingsList = () => {
       />
       <Stack
         direction={{ xs: 'column', md: 'row' }}
-        spacing={2}
+        spacing={1.5}
         flexWrap="wrap"
-        mb={3}
+        mb={1}
         flexShrink={0}
       >
         {[
@@ -201,18 +195,18 @@ export const MeetingsList = () => {
             key={stat.label}
             elevation={0}
             sx={{
-              p: 2.5,
-              borderRadius: 3,
+              p: 1.5,
+              borderRadius: 2,
               flex: { xs: '1 1 100%', md: '1 1 25%' },
             }}
           >
-            <Typography variant="overline" color="text.secondary">
+            <Typography variant="overline" color="text.secondary" sx={{ fontSize: '0.65rem' }}>
               {stat.label}
             </Typography>
-            <Typography variant="h4" fontWeight={700} sx={{ mt: 1 }}>
+            <Typography variant="h6" fontWeight={700} sx={{ mt: 0.5 }}>
               {stat.value}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="caption" color="text.secondary">
               {stat.helper}
             </Typography>
           </Paper>
@@ -231,7 +225,6 @@ export const MeetingsList = () => {
         <TableContainer
           sx={{
             flexGrow: 1,
-            maxHeight: MEETINGS_TABLE_MAX_HEIGHT,
             overflowY: 'auto',
           }}
         >
