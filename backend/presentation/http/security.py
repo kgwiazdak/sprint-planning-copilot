@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import json
+import jwt
 import time
 import urllib.request
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
-
-import jwt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from typing import Any
 
 from backend import audit
 from backend.settings import AzureADSettings, get_settings
@@ -113,7 +112,7 @@ def _get_validator() -> AzureADTokenValidator | None:
 
 @asynccontextmanager
 async def require_authenticated_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+        credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
     settings = get_settings().azure_ad
     if not settings.enabled:

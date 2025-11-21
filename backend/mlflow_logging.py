@@ -23,9 +23,11 @@ except ModuleNotFoundError:
     class MlflowException(RuntimeError):
         """Placeholder raised when MLflow is unavailable."""
 
+
     class MlflowClient:
         def __init__(self, *args, **kwargs):
             raise RuntimeError("MlflowClient requires the 'mlflow' package to be installed")
+
 
     class _MlflowStub:
         def __getattr__(self, name):  # noqa: D401
@@ -33,6 +35,7 @@ except ModuleNotFoundError:
                 raise RuntimeError(f"mlflow.{name} requires the 'mlflow' package to be installed")
 
             return _missing
+
 
     mlflow = _MlflowStub()  # type: ignore[assignment]
 from pydantic import BaseModel, ValidationError
@@ -57,7 +60,8 @@ PROMPT_TEMPLATE_ID = os.getenv("PROMPT_TEMPLATE_ID", "default-template")
 PROMPT_VERSION = os.getenv("PROMPT_VERSION", "v1")
 RUN_PHASES = ("transcription", "extraction", "normalization", "approval", "push_to_jira", "reports")
 SENSITIVE_KEYS = ("api_key", "apikey", "token", "secret", "password", "connection_string")
-SECRET_VALUE_REGEX = re.compile(r"(?i)(api_key|token|secret|password|connection_string)\s*[:=]\s*([A-Za-z0-9\-_/+=]{6,})")
+SECRET_VALUE_REGEX = re.compile(
+    r"(?i)(api_key|token|secret|password|connection_string)\s*[:=]\s*([A-Za-z0-9\-_/+=]{6,})")
 LATENCY_ACCUMULATION_KEYS = {
     "latency_ms_transcribe",
     "latency_ms_llm",
@@ -168,16 +172,16 @@ class PresidioPIIRedactor(BasePIIRedactor):
 
 
 def log_extraction_run(
-    meeting_id: str,
-    run_id: str,
-    transcript: str,
-    result: ExtractionResult | BaseModel | Mapping[str, Any],
-    *,
-    meeting_date: str | None = None,
-    transcript_blob_uri: str | None = None,
-    transcript_language: str | None = None,
-    telemetry: Mapping[str, Any] | None = None,
-    diarization_payload: Mapping[str, Any] | None = None,
+        meeting_id: str,
+        run_id: str,
+        transcript: str,
+        result: ExtractionResult | BaseModel | Mapping[str, Any],
+        *,
+        meeting_date: str | None = None,
+        transcript_blob_uri: str | None = None,
+        transcript_language: str | None = None,
+        telemetry: Mapping[str, Any] | None = None,
+        diarization_payload: Mapping[str, Any] | None = None,
 ) -> LoggedRunInfo | None:
     """Log the extraction pipeline execution to MLflow and return run metadata."""
 
@@ -273,13 +277,15 @@ def log_extraction_run(
                 alerts=alerts,
             )
             _log_artifact_content(
-                ArtifactRecord(path="artifacts/reports/run_summary.html", content=report_html, is_json=False, compressible=False)
+                ArtifactRecord(path="artifacts/reports/run_summary.html", content=report_html, is_json=False,
+                               compressible=False)
             )
 
             run_url = _build_run_url(setup.tracking_uri, setup.experiment_id, active_run.info.run_id)
             mlflow.set_tag("mlflow.run_url", run_url)
             logger.info(
-                "Logged MLflow run for meeting_id=%s db_run_id=%s mlflow_run_id=%s", meeting_id, run_id, active_run.info.run_id
+                "Logged MLflow run for meeting_id=%s db_run_id=%s mlflow_run_id=%s", meeting_id, run_id,
+                active_run.info.run_id
             )
             return LoggedRunInfo(run_id=active_run.info.run_id, run_url=run_url, experiment_id=setup.experiment_id)
     except MlflowException as exc:
@@ -300,20 +306,20 @@ class MlflowSetup:
 
 
 def _build_phase_data(
-    *,
-    telemetry: Mapping[str, Any],
-    transcript_snippet: str,
-    transcript_full: str,
-    diarization_payload: Mapping[str, Any],
-    raw_payload: Mapping[str, Any],
-    normalized_payload: Mapping[str, Any],
-    approval_stats: Mapping[str, Any],
-    diff_stats: Mapping[str, Any],
-    prompt_template: str,
-    json_valid_rate: float,
-    is_valid: bool,
-    transcript_blob_uri: str,
-    transcript_language: str,
+        *,
+        telemetry: Mapping[str, Any],
+        transcript_snippet: str,
+        transcript_full: str,
+        diarization_payload: Mapping[str, Any],
+        raw_payload: Mapping[str, Any],
+        normalized_payload: Mapping[str, Any],
+        approval_stats: Mapping[str, Any],
+        diff_stats: Mapping[str, Any],
+        prompt_template: str,
+        json_valid_rate: float,
+        is_valid: bool,
+        transcript_blob_uri: str,
+        transcript_language: str,
 ) -> list[PhaseData]:
     transcription_metrics = telemetry.get("transcription", {})
     extraction_metrics = telemetry.get("extraction", {})
@@ -369,7 +375,8 @@ def _build_phase_data(
             params={
                 "llm_provider": extraction_metrics.get("llm_provider", os.getenv("LLM_PROVIDER", "azure")),
                 "llm_model_name": extraction_metrics.get("llm_model_name", _get_llm_model_name()),
-                "llm_model_version": extraction_metrics.get("llm_model_version", os.getenv("LLM_MODEL_VERSION", "unknown")),
+                "llm_model_version": extraction_metrics.get("llm_model_version",
+                                                            os.getenv("LLM_MODEL_VERSION", "unknown")),
             },
             artifacts=[
                 ArtifactRecord("artifacts/extraction/raw.json", raw_payload, is_json=True),
@@ -442,17 +449,17 @@ def _build_phase_data(
 
 
 def _build_core_params(
-    *,
-    meeting_id: str,
-    run_id: str,
-    meeting_date: str,
-    transcript_language: str,
-    transcript_blob_uri: str,
-    prompt_hash: str,
-    prompt_template: str,
-    pii_mode: str,
-    pii_rules: Sequence[str],
-    pipeline_version: str,
+        *,
+        meeting_id: str,
+        run_id: str,
+        meeting_date: str,
+        transcript_language: str,
+        transcript_blob_uri: str,
+        prompt_hash: str,
+        prompt_template: str,
+        pii_mode: str,
+        pii_rules: Sequence[str],
+        pipeline_version: str,
 ) -> dict[str, Any]:
     llm_temperature = os.getenv("LLM_TEMPERATURE", "0.1")
     params: dict[str, Any] = {
@@ -490,10 +497,10 @@ def _build_tags(meeting_id: str) -> MutableMapping[str, str]:
 
 
 def _build_aggregate_metrics(
-    phase_data: Iterable[PhaseData],
-    tasks_extracted: int,
-    json_valid_rate: float,
-    approval_stats: Mapping[str, Any],
+        phase_data: Iterable[PhaseData],
+        tasks_extracted: int,
+        json_valid_rate: float,
+        approval_stats: Mapping[str, Any],
 ) -> dict[str, float]:
     total_latency = 0.0
     total_cost = 0.0
@@ -513,14 +520,15 @@ def _build_aggregate_metrics(
 
 
 def _build_html_summary(
-    *,
-    normalized_payload: Mapping[str, Any],
-    approval_stats: Mapping[str, Any],
-    diff_stats: Mapping[str, Any],
-    alerts: Mapping[str, Any],
+        *,
+        normalized_payload: Mapping[str, Any],
+        approval_stats: Mapping[str, Any],
+        diff_stats: Mapping[str, Any],
+        alerts: Mapping[str, Any],
 ) -> str:
     tasks_preview = "".join(
-        f"<li>{_scrub_secrets(task.get('summary', 'missing summary'))}</li>" for task in normalized_payload.get("tasks", [])[:10]
+        f"<li>{_scrub_secrets(task.get('summary', 'missing summary'))}</li>" for task in
+        normalized_payload.get("tasks", [])[:10]
     )
     alerts_list = "".join(f"<li>{name}: {value}</li>" for name, value in alerts.get("flags", {}).items())
     return (
@@ -591,8 +599,8 @@ def _compute_approval_stats(payload: Mapping[str, Any]) -> Mapping[str, Any]:
 
 
 def _compute_edit_distance_stats(
-    raw_payload: Mapping[str, Any],
-    normalized_payload: Mapping[str, Any],
+        raw_payload: Mapping[str, Any],
+        normalized_payload: Mapping[str, Any],
 ) -> Mapping[str, Any]:
     from difflib import SequenceMatcher
 
@@ -630,10 +638,10 @@ def _compute_edit_distance_stats(
 
 
 def _derive_alerts(
-    *,
-    json_valid_rate: float,
-    approval_stats: Mapping[str, Any],
-    aggregate_metrics: Mapping[str, float],
+        *,
+        json_valid_rate: float,
+        approval_stats: Mapping[str, Any],
+        aggregate_metrics: Mapping[str, float],
 ) -> Mapping[str, Any]:
     flags: dict[str, Any] = {}
     metrics: dict[str, float] = {}
@@ -733,6 +741,7 @@ def _validate_payload(payload: Mapping[str, Any]) -> tuple[bool, Mapping[str, An
     except ValidationError:
         logger.warning("Extraction payload failed schema validation; logging raw payload only.")
         return False, payload
+
 
 def _build_redactor() -> BasePIIRedactor:
     preferred = os.getenv("PII_REDACTOR", "presidio").lower()

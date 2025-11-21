@@ -6,19 +6,19 @@ import re
 import unicodedata
 import uuid
 from datetime import datetime
-from pathlib import Path
-from typing import Literal
-
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
+from pathlib import Path
 from pydantic import BaseModel, Field
+from typing import Literal
 
 from backend.application.commands.meeting_import import MeetingImportPayload, SubmitMeetingImportCommand
 from backend.application.services.push_to_jira import PushTasksToJiraService
+from backend.container import get_mock_audio_path
 from backend.domain.ports import MeetingsRepositoryPort
+from backend.infrastructure.jira import JiraClient, JiraClientError
 from backend.infrastructure.persistence.sqlite import TASK_STATUSES
 from backend.infrastructure.storage.blob import BlobStorageConfigError, BlobStorageService
-from backend.infrastructure.jira import JiraClient, JiraClientError
 from backend.presentation.http.dependencies import (
     blob_storage_service,
     data_repository,
@@ -28,7 +28,6 @@ from backend.presentation.http.dependencies import (
 )
 from backend.presentation.http.security import require_authenticated_user
 from backend.settings import get_settings
-from backend.container import get_mock_audio_path
 
 router = APIRouter(
     prefix="/api",
@@ -151,8 +150,8 @@ def list_meeting_tasks(meeting_id: str, repo: MeetingsRepositoryPort = Depends(_
 
 @router.get("/tasks")
 def list_tasks(
-    status: str | None = Query(default=None),
-    repo: MeetingsRepositoryPort = Depends(_repo),
+        status: str | None = Query(default=None),
+        repo: MeetingsRepositoryPort = Depends(_repo),
 ):
     if status and status not in TASK_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status filter")
@@ -177,9 +176,9 @@ def update_task(task_id: str, payload: TaskUpdate, repo: MeetingsRepositoryPort 
 
 @router.post("/tasks/bulk-approve")
 def bulk_approve_tasks(
-    payload: BulkAction,
-    repo: MeetingsRepositoryPort = Depends(_repo),
-    jira: JiraClient = Depends(jira_dependency),
+        payload: BulkAction,
+        repo: MeetingsRepositoryPort = Depends(_repo),
+        jira: JiraClient = Depends(jira_dependency),
 ):
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
     try:
@@ -202,11 +201,11 @@ def list_users(repo: MeetingsRepositoryPort = Depends(_repo)):
 
 @router.post("/users/voice", response_model=VoiceUploadResponse, status_code=201)
 async def upload_voice_sample(
-    displayName: str = Form(..., min_length=1),
-    file: UploadFile = File(...),
-    userId: str | None = Form(default=None),
-    repo: MeetingsRepositoryPort = Depends(_repo),
-    worker_storage: BlobStorageService = Depends(worker_blob_storage_service),
+        displayName: str = Form(..., min_length=1),
+        file: UploadFile = File(...),
+        userId: str | None = Form(default=None),
+        repo: MeetingsRepositoryPort = Depends(_repo),
+        worker_storage: BlobStorageService = Depends(worker_blob_storage_service),
 ):
     payload = await file.read()
     if not payload:
@@ -255,8 +254,8 @@ def download_mock_audio():
 
 @router.post("/uploads/blob", response_model=BlobUploadResponse)
 def create_blob_upload(
-    payload: BlobUploadRequest,
-    storage: BlobStorageService = Depends(blob_storage_service),
+        payload: BlobUploadRequest,
+        storage: BlobStorageService = Depends(blob_storage_service),
 ):
     meeting_id = payload.meetingId or str(uuid.uuid4())
     try:
@@ -279,8 +278,8 @@ def create_blob_upload(
 
 @router.post("/meetings/import", status_code=202)
 async def import_meeting(
-    payload: MeetingImportRequest,
-    command: SubmitMeetingImportCommand = Depends(submit_import_command),
+        payload: MeetingImportRequest,
+        command: SubmitMeetingImportCommand = Depends(submit_import_command),
 ):
     meeting_id = await command.execute(
         MeetingImportPayload(

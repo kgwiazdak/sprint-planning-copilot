@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-
 import asyncio
 import pytest
+from dataclasses import dataclass
 
 from backend.application.commands.meeting_import import MeetingImportPayload, SubmitMeetingImportCommand
 from backend.domain.entities import MeetingImportJob

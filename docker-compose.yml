@@ -47,7 +47,7 @@ services:
 
   worker:
     build: .
-    command: ["python", "-m", "backend.worker"]
+    command: [ "python", "-m", "backend.worker" ]
     env_file:
       - .env
     environment:

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import logging
+from azure.core.exceptions import AzureError
+from azure.storage.blob import BlobServiceClient
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
-
-from azure.core.exceptions import AzureError
-from azure.storage.blob import BlobServiceClient
 
 from backend.domain.ports import MeetingsRepositoryPort
 
@@ -24,11 +23,11 @@ class VoiceSamplesSyncService:
     """Downloads intro_* voice samples from a dedicated Azure container."""
 
     def __init__(
-        self,
-        *,
-        connection_string: str,
-        container_name: str,
-        target_dir: Path,
+            self,
+            *,
+            connection_string: str,
+            container_name: str,
+            target_dir: Path,
     ) -> None:
         self._target_dir = target_dir
         self._service = BlobServiceClient.from_connection_string(connection_string)

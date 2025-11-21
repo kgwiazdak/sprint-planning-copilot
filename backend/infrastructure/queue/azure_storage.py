@@ -3,12 +3,11 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from azure.core.exceptions import ResourceExistsError
+from azure.storage.queue import QueueClient, QueueServiceClient
 from collections.abc import Awaitable, Callable
 from dataclasses import asdict
 from typing import Any
-
-from azure.core.exceptions import ResourceExistsError
-from azure.storage.queue import QueueClient, QueueServiceClient
 
 from backend.domain.entities import MeetingImportJob
 from backend.domain.ports import MeetingImportQueuePort
@@ -31,11 +30,11 @@ class AzureMeetingImportQueue(MeetingImportQueuePort):
     """Azure Storage Queue implementation for meeting import jobs."""
 
     def __init__(
-        self,
-        *,
-        connection_string: str | None = None,
-        queue_name: str | None = None,
-        queue_client: QueueClient | None = None,
+            self,
+            *,
+            connection_string: str | None = None,
+            queue_name: str | None = None,
+            queue_client: QueueClient | None = None,
     ) -> None:
         if queue_client is None:
             if not connection_string or not queue_name:
@@ -61,13 +60,13 @@ class AzureQueueWorker:
     """Background worker that polls the Azure Storage queue and processes jobs."""
 
     def __init__(
-        self,
-        queue_client: QueueClient,
-        handler: Callable[[MeetingImportJob], Awaitable[None]],
-        *,
-        visibility_timeout: int = 300,
-        poll_interval_seconds: float = 2.0,
-        max_batch_size: int = 16,
+            self,
+            queue_client: QueueClient,
+            handler: Callable[[MeetingImportJob], Awaitable[None]],
+            *,
+            visibility_timeout: int = 300,
+            poll_interval_seconds: float = 2.0,
+            max_batch_size: int = 16,
     ) -> None:
         self._queue_client = queue_client
         self._handler = handler

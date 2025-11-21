@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import types
-
 import pytest
+import types
 
 from backend import container
 
@@ -14,9 +13,9 @@ class DummyUseCase:
 
 def _reset(monkeypatch: pytest.MonkeyPatch) -> None:
     for key in (
-        "AZURE_STORAGE_QUEUE_NAME",
-        "AZURE_STORAGE_QUEUE_CONNECTION_STRING",
-        "AZURE_STORAGE_CONNECTION_STRING",
+            "AZURE_STORAGE_QUEUE_NAME",
+            "AZURE_STORAGE_QUEUE_CONNECTION_STRING",
+            "AZURE_STORAGE_CONNECTION_STRING",
     ):
         monkeypatch.delenv(key, raising=False)
     container.get_settings.cache_clear()

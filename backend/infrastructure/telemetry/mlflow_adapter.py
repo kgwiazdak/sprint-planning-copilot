@@ -10,14 +10,14 @@ class MLflowTelemetryAdapter(TelemetryPort):
     """Thin adapter that proxies telemetry events to MLflow."""
 
     def log_extraction_run(
-        self,
-        *,
-        meeting_id: str,
-        run_id: str,
-        transcript: str,
-        result: ExtractionResult,
-        meeting_date: str,
-        transcript_blob_uri: str | None,
+            self,
+            *,
+            meeting_id: str,
+            run_id: str,
+            transcript: str,
+            result: ExtractionResult,
+            meeting_date: str,
+            transcript_blob_uri: str | None,
     ) -> None:
         try:
             log_mlflow_access("log_run", meeting_id=meeting_id, run_id=run_id)

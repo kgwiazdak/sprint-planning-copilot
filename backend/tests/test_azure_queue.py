@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import asdict
-
 import pytest
+from dataclasses import asdict
 
 from backend.domain.entities import MeetingImportJob
 from backend.infrastructure.queue.azure_storage import AzureMeetingImportQueue, AzureQueueWorker

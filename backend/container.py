@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 import os
-from pathlib import Path
 from functools import lru_cache
+from pathlib import Path
 
 from backend.application.services.voice_profiles import VoiceSamplesSyncService, register_voice_samples
 from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase

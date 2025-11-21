@@ -104,7 +104,8 @@ def test_build_aggregate_metrics_sums_duplicates():
         logging_utils.PhaseData(name="two", metrics={"latency_ms_llm": 50.0}),
     ]
     approval_stats = {"approval_rate": 0.5, "tasks_approved": 1}
-    metrics = logging_utils._build_aggregate_metrics(phases, tasks_extracted=2, json_valid_rate=1.0, approval_stats=approval_stats)
+    metrics = logging_utils._build_aggregate_metrics(phases, tasks_extracted=2, json_valid_rate=1.0,
+                                                     approval_stats=approval_stats)
     assert metrics["latency_ms_llm"] == 150.0
     assert metrics["latency_ms_total"] == 150.0
     assert metrics["cost_usd"] == 1.5

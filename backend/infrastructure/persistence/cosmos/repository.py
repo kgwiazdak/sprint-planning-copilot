@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import datetime
 import uuid
-from typing import Any, Iterable
-
 from azure.cosmos import CosmosClient, PartitionKey, exceptions
+from typing import Any, Iterable
 
 from backend.audit import log_meeting_access
 from backend.domain.ports import MeetingsRepositoryPort
@@ -20,15 +19,15 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
     """Cosmos DB implementation of the meetings/tasks repository."""
 
     def __init__(
-        self,
-        *,
-        account_uri: str,
-        key: str,
-        database_name: str,
-        meetings_container: str,
-        tasks_container: str,
-        users_container: str,
-        runs_container: str,
+            self,
+            *,
+            account_uri: str,
+            key: str,
+            database_name: str,
+            meetings_container: str,
+            tasks_container: str,
+            users_container: str,
+            runs_container: str,
     ) -> None:
         if not account_uri or not key:
             raise ValueError("Cosmos DB account URI and key are required.")
@@ -53,12 +52,12 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         log_meeting_access("repository_init", details={"backend": "cosmos"})
 
     def _audit(
-        self,
-        action: str,
-        *,
-        meeting_id: str | None = None,
-        resource: str = "meeting",
-        details: dict[str, Any] | None = None,
+            self,
+            action: str,
+            *,
+            meeting_id: str | None = None,
+            resource: str = "meeting",
+            details: dict[str, Any] | None = None,
     ) -> None:
         log_meeting_access(action, meeting_id=meeting_id, resource=resource, details=details)
 
@@ -111,12 +110,12 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             return None
 
     def create_meeting(
-        self,
-        *,
-        title: str,
-        started_at: str,
-        source_url: str | None,
-        source_text: str | None,
+            self,
+            *,
+            title: str,
+            started_at: str,
+            source_url: str | None,
+            source_text: str | None,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
         self._audit("create", meeting_id=meeting_id)
@@ -311,12 +310,12 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
     # --- Ports implementation -------------------------------------------
 
     def create_meeting_stub(
-        self,
-        *,
-        meeting_id: str,
-        title: str,
-        started_at: str,
-        blob_url: str,
+            self,
+            *,
+            meeting_id: str,
+            title: str,
+            started_at: str,
+            blob_url: str,
     ) -> None:
         self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
         now = utc_now_iso()
@@ -340,15 +339,15 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         self._meetings.upsert_item(doc)
 
     def store_meeting_and_result(
-        self,
-        filename: str,
-        transcript: str,
-        result_model: ExtractionResult,
-        *,
-        meeting_id: str | None = None,
-        title: str | None = None,
-        started_at: str | None = None,
-        blob_url: str | None = None,
+            self,
+            filename: str,
+            transcript: str,
+            result_model: ExtractionResult,
+            *,
+            meeting_id: str | None = None,
+            title: str | None = None,
+            started_at: str | None = None,
+            blob_url: str | None = None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
         self._audit(
@@ -391,7 +390,8 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
                 "meetingId": meeting_id,
                 "summary": task.summary,
                 "description": task.description,
-                "issueType": task.issue_type.value if hasattr(task, "issue_type") else getattr(task, "issue_type", "Task"),
+                "issueType": task.issue_type.value if hasattr(task, "issue_type") else getattr(task, "issue_type",
+                                                                                               "Task"),
                 "priority": task.priority.value if hasattr(task, "priority") else getattr(task, "priority", "Medium"),
                 "storyPoints": getattr(task, "story_points", None),
                 "assigneeId": assignee_id,

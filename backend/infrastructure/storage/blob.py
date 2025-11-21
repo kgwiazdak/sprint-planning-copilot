@@ -1,13 +1,12 @@
+import asyncio
 import os
 import pathlib
 import uuid
+from azure.core.exceptions import AzureError, ResourceExistsError
+from azure.storage.blob import BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
-import asyncio
-from azure.core.exceptions import AzureError, ResourceExistsError
-from azure.storage.blob import BlobSasPermissions, BlobServiceClient, ContentSettings, generate_blob_sas
 
 from backend.mlflow_logging import logger
 
@@ -32,13 +31,14 @@ class BlobStorageService:
     """Uploads files to an Azure Blob Storage container."""
 
     def __init__(
-        self,
-        *,
-        container_name: str,
-        connection_string: Optional[str] = None,
+            self,
+            *,
+            container_name: str,
+            connection_string: Optional[str] = None,
     ):
         if not container_name or not connection_string:
-            raise BlobStorageConfigError("AZURE_STORAGE_CONTAINER_NAME and AZURE_STORAGE_CONNECTION_STRING are required.")
+            raise BlobStorageConfigError(
+                "AZURE_STORAGE_CONTAINER_NAME and AZURE_STORAGE_CONNECTION_STRING are required.")
 
         service_client = BlobServiceClient.from_connection_string(connection_string)
         self._container_name = container_name
@@ -74,23 +74,23 @@ class BlobStorageService:
             ) from exc
 
     async def save_file(
-        self,
-        *,
-        meeting_id: str,
-        original_filename: str,
-        content: bytes,
-        content_type: Optional[str],
+            self,
+            *,
+            meeting_id: str,
+            original_filename: str,
+            content: bytes,
+            content_type: Optional[str],
     ) -> str:
         blob_name = self._build_blob_name(meeting_id, original_filename)
         blob_url = await asyncio.to_thread(self._upload_bytes, blob_name, content, content_type)
         return blob_url
 
     async def upload_blob(
-        self,
-        *,
-        blob_name: str,
-        content: bytes,
-        content_type: Optional[str],
+            self,
+            *,
+            blob_name: str,
+            content: bytes,
+            content_type: Optional[str],
     ) -> str:
         return await asyncio.to_thread(self._upload_bytes, blob_name, content, content_type)
 
@@ -108,12 +108,12 @@ class BlobStorageService:
         return blob_client.url
 
     def generate_upload_token(
-        self,
-        *,
-        meeting_id: str,
-        original_filename: str,
-        content_type: Optional[str],
-        expires_in_seconds: int = 3600,
+            self,
+            *,
+            meeting_id: str,
+            original_filename: str,
+            content_type: Optional[str],
+            expires_in_seconds: int = 3600,
     ) -> BlobUploadToken:
         if not self._account_key:
             raise BlobStorageConfigError("Azure Storage account key is required to generate SAS upload URLs.")
@@ -166,7 +166,7 @@ class BlobStorageService:
         prefix = f"{self._container_client.url}/"
         if not blob_url.startswith(prefix):
             raise BlobStorageUploadError("Blob URL does not belong to configured container.")
-        return blob_url[len(prefix) :]
+        return blob_url[len(prefix):]
 
     @staticmethod
     def _parse_connection_string(connection_string: str) -> dict[str, str]:

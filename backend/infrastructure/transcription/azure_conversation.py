@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import azure.cognitiveservices.speech as speechsdk
 import os
 import threading
+from azure.cognitiveservices.speech import transcription as speech_transcription
 from pathlib import Path
 from typing import Callable, List
-
-import azure.cognitiveservices.speech as speechsdk
-from azure.cognitiveservices.speech import transcription as speech_transcription
 
 from backend.infrastructure.audio import normalizer
 
@@ -17,16 +16,16 @@ class AzureConversationTranscriber:
     SUPPORTED_AUDIO_EXTENSIONS: tuple[str, ...] = (".wav", ".mp3")
 
     def __init__(
-        self,
-        *,
-        key: str | None,
-        region: str | None,
-        language: str = "en-US",
-        sample_rate: int = 16000,
-        channels: int = 1,
-        intro_audio_dir: str | Path | None = None,
-        intro_pattern: str = "intro_*.*",
-        intro_silence_ms: int = 300,
+            self,
+            *,
+            key: str | None,
+            region: str | None,
+            language: str = "en-US",
+            sample_rate: int = 16000,
+            channels: int = 1,
+            intro_audio_dir: str | Path | None = None,
+            intro_pattern: str = "intro_*.*",
+            intro_silence_ms: int = 300,
     ) -> None:
         if not key or not region:
             raise ValueError("Azure Speech key and region must be configured")
@@ -99,11 +98,11 @@ class AzureConversationTranscriber:
         return " ".join(parts) if parts else "Speaker"
 
     def _prepend_reference_intros(
-        self,
-        meeting_frames: bytes,
-        sample_rate: int,
-        sample_width: int,
-        channels: int,
+            self,
+            meeting_frames: bytes,
+            sample_rate: int,
+            sample_width: int,
+            channels: int,
     ):
         intros = self._load_intro_chunks(sample_rate, sample_width, channels)
         if not intros:

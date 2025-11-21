@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-
 from dotenv import load_dotenv
 
 from backend.container import get_meeting_queue_worker

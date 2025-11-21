@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
-
 from pydantic import BaseModel, Field, conint, field_validator
+from typing import List, Optional
 
 
 class IssueType(str, Enum):

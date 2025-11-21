@@ -29,15 +29,15 @@ class DummyRepository:
         self.statuses.append((meeting_id, status))
 
     def store_meeting_and_result(
-        self,
-        filename: str,
-        transcript: str,
-        result_model: ExtractionResult,
-        *,
-        meeting_id: str | None = None,
-        title: str | None = None,
-        started_at: str | None = None,
-        blob_url: str | None = None,
+            self,
+            filename: str,
+            transcript: str,
+            result_model: ExtractionResult,
+            *,
+            meeting_id: str | None = None,
+            title: str | None = None,
+            started_at: str | None = None,
+            blob_url: str | None = None,
     ) -> tuple[str, str]:
         self.captured = {
             "filename": filename,

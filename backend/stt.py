@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from backend.settings import get_config
 from backend.infrastructure.transcription.azure_conversation import (
     AzureConversationTranscriber,
     SUPPORTED_AUDIO_EXTENSIONS,
 )
+from backend.settings import get_config
 
 
 def _default_transcriber() -> AzureConversationTranscriber:

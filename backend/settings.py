@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from functools import lru_cache
 import os
+from functools import lru_cache
 from pydantic import BaseModel
 
 
@@ -148,7 +148,8 @@ class AppConfig(BaseModel):
                 story_points_field=os.getenv("JIRA_STORY_POINTS_FIELD"),
             ),
             queue=QueueSettings(
-                connection_string=os.getenv("AZURE_STORAGE_QUEUE_CONNECTION_STRING", os.getenv("AZURE_STORAGE_CONNECTION_STRING")),
+                connection_string=os.getenv("AZURE_STORAGE_QUEUE_CONNECTION_STRING",
+                                            os.getenv("AZURE_STORAGE_CONNECTION_STRING")),
                 queue_name=os.getenv("AZURE_STORAGE_QUEUE_NAME"),
                 visibility_timeout=int(os.getenv("MEETING_QUEUE_VISIBILITY_TIMEOUT", "300")),
                 poll_interval_seconds=float(os.getenv("MEETING_QUEUE_POLL_INTERVAL", "2.0")),

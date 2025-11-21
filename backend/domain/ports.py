@@ -2,19 +2,19 @@ from __future__ import annotations
 
 from typing import Any, Iterable, Protocol, runtime_checkable
 
-from backend.schemas import ExtractionResult
 from backend.domain.entities import MeetingImportJob
+from backend.schemas import ExtractionResult
 
 
 @runtime_checkable
 class BlobStoragePort(Protocol):
     async def save_file(
-        self,
-        *,
-        meeting_id: str,
-        original_filename: str,
-        content: bytes,
-        content_type: str | None,
+            self,
+            *,
+            meeting_id: str,
+            original_filename: str,
+            content: bytes,
+            content_type: str | None,
     ) -> str:
         """Persist the original upload and return a blob URI."""
 
@@ -42,12 +42,12 @@ class MeetingsRepositoryPort(Protocol):
         """Return all meetings with draft counts."""
 
     def create_meeting(
-        self,
-        *,
-        title: str,
-        started_at: str,
-        source_url: str | None,
-        source_text: str | None,
+            self,
+            *,
+            title: str,
+            started_at: str,
+            source_url: str | None,
+            source_text: str | None,
     ) -> dict[str, Any]:
         """Create a manual meeting entry."""
 
@@ -94,12 +94,12 @@ class MeetingsRepositoryPort(Protocol):
         """Store Jira account linkage."""
 
     def create_meeting_stub(
-        self,
-        *,
-        meeting_id: str,
-        title: str,
-        started_at: str,
-        blob_url: str,
+            self,
+            *,
+            meeting_id: str,
+            title: str,
+            started_at: str,
+            blob_url: str,
     ) -> None:
         """Persist an initial queued meeting entry."""
 
@@ -107,15 +107,15 @@ class MeetingsRepositoryPort(Protocol):
         """Update ingestion status for an existing meeting."""
 
     def store_meeting_and_result(
-        self,
-        filename: str,
-        transcript: str,
-        result_model: ExtractionResult,
-        *,
-        meeting_id: str | None = None,
-        title: str | None = None,
-        started_at: str | None = None,
-        blob_url: str | None = None,
+            self,
+            filename: str,
+            transcript: str,
+            result_model: ExtractionResult,
+            *,
+            meeting_id: str | None = None,
+            title: str | None = None,
+            started_at: str | None = None,
+            blob_url: str | None = None,
     ) -> tuple[str, str]:
         """Persist transcript and extraction payload and return (meeting_id, run_id)."""
 
@@ -123,14 +123,14 @@ class MeetingsRepositoryPort(Protocol):
 @runtime_checkable
 class TelemetryPort(Protocol):
     def log_extraction_run(
-        self,
-        *,
-        meeting_id: str,
-        run_id: str,
-        transcript: str,
-        result: ExtractionResult,
-        meeting_date: str,
-        transcript_blob_uri: str | None,
+            self,
+            *,
+            meeting_id: str,
+            run_id: str,
+            transcript: str,
+            result: ExtractionResult,
+            meeting_date: str,
+            transcript_blob_uri: str | None,
     ) -> None:
         """Emit telemetry for an extraction workflow."""
 

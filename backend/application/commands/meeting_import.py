@@ -21,10 +21,10 @@ class SubmitMeetingImportCommand:
     """Handles API submission by persisting stub meetings and enqueuing jobs."""
 
     def __init__(
-        self,
-        *,
-        repository: MeetingsRepositoryPort,
-        queue: MeetingImportQueuePort,
+            self,
+            *,
+            repository: MeetingsRepositoryPort,
+            queue: MeetingImportQueuePort,
     ) -> None:
         self._repo = repository
         self._queue = queue

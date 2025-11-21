@@ -9,10 +9,9 @@ from backend.audit import log_meeting_access
 from backend.domain.ports import MeetingsRepositoryPort
 from backend.domain.status import MeetingStatus
 from backend.schemas import ExtractionResult
-
+from . import mappers
 from .constants import ISSUE_TYPES, PRIORITIES, TASK_STATUSES
 from .database import SqliteDatabase, utc_now_iso
-from . import mappers
 
 
 class SqliteMeetingsRepository(MeetingsRepositoryPort):
@@ -23,12 +22,12 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         log_meeting_access("repository_init", details={"backend": "sqlite"})
 
     def _audit(
-        self,
-        action: str,
-        *,
-        meeting_id: str | None = None,
-        resource: str = "meeting",
-        details: dict[str, Any] | None = None,
+            self,
+            action: str,
+            *,
+            meeting_id: str | None = None,
+            resource: str = "meeting",
+            details: dict[str, Any] | None = None,
     ) -> None:
         log_meeting_access(action, meeting_id=meeting_id, resource=resource, details=details)
 
@@ -91,12 +90,12 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def create_meeting(
-        self,
-        *,
-        title: str,
-        started_at: str,
-        source_url: str | None,
-        source_text: str | None,
+            self,
+            *,
+            title: str,
+            started_at: str,
+            source_url: str | None,
+            source_text: str | None,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
         self._audit("create", meeting_id=meeting_id)
@@ -371,12 +370,12 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
 
     # --- Ports implementation -------------------------------------------
     def create_meeting_stub(
-        self,
-        *,
-        meeting_id: str,
-        title: str,
-        started_at: str,
-        blob_url: str,
+            self,
+            *,
+            meeting_id: str,
+            title: str,
+            started_at: str,
+            blob_url: str,
     ) -> None:
         self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
         now = utc_now_iso()
@@ -415,15 +414,15 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             conn.close()
 
     def store_meeting_and_result(
-        self,
-        filename: str,
-        transcript: str,
-        result_model: ExtractionResult,
-        *,
-        meeting_id: Optional[str] = None,
-        title: Optional[str] = None,
-        started_at: Optional[str] = None,
-        blob_url: Optional[str] = None,
+            self,
+            filename: str,
+            transcript: str,
+            result_model: ExtractionResult,
+            *,
+            meeting_id: Optional[str] = None,
+            title: Optional[str] = None,
+            started_at: Optional[str] = None,
+            blob_url: Optional[str] = None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
         self._audit(

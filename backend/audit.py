@@ -25,7 +25,8 @@ def current_actor() -> str:
     return _actor.get()
 
 
-def log_meeting_access(action: str, *, meeting_id: str | None = None, resource: str = "meeting", details: dict[str, Any] | None = None) -> None:
+def log_meeting_access(action: str, *, meeting_id: str | None = None, resource: str = "meeting",
+                       details: dict[str, Any] | None = None) -> None:
     payload: dict[str, Any] = {
         "event": "meeting_data_access",
         "actor": current_actor(),
@@ -39,7 +40,8 @@ def log_meeting_access(action: str, *, meeting_id: str | None = None, resource: 
     audit_logger.info("meeting_data_access", extra={"audit": payload})
 
 
-def log_mlflow_access(action: str, *, meeting_id: str, run_id: str | None = None, details: dict[str, Any] | None = None) -> None:
+def log_mlflow_access(action: str, *, meeting_id: str, run_id: str | None = None,
+                      details: dict[str, Any] | None = None) -> None:
     payload: dict[str, Any] = {
         "event": "mlflow_access",
         "actor": current_actor(),

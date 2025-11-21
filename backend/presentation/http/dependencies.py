@@ -4,9 +4,6 @@ from fastapi import HTTPException
 
 from backend.application.commands.meeting_import import SubmitMeetingImportCommand
 from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase
-from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
-from backend.infrastructure.jira import JiraClient
-from backend.infrastructure.storage.blob import BlobStorageService
 from backend.container import (
     get_blob_storage,
     get_worker_blob_storage,
@@ -15,6 +12,9 @@ from backend.container import (
     get_meeting_queue,
     get_meetings_repository,
 )
+from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
+from backend.infrastructure.jira import JiraClient
+from backend.infrastructure.storage.blob import BlobStorageService
 
 
 def extraction_workflow() -> ExtractMeetingUseCase:

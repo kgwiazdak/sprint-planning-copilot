@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import os
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-
-import asyncio
 
 from backend import audit
 from backend.domain.entities import MeetingImportJob
@@ -44,14 +43,14 @@ class ExtractMeetingUseCase:
     """Coordinates ingestion, transcription, extraction, persistence and telemetry."""
 
     def __init__(
-        self,
-        *,
-        blob_storage: BlobStoragePort | None,
-        transcription: TranscriptionPort | None,
-        extractor: ExtractionPort,
-        meetings_repo: MeetingsRepositoryPort,
-        telemetry: TelemetryPort | None,
-        audio_extensions: tuple[str, ...] | None = None,
+            self,
+            *,
+            blob_storage: BlobStoragePort | None,
+            transcription: TranscriptionPort | None,
+            extractor: ExtractionPort,
+            meetings_repo: MeetingsRepositoryPort,
+            telemetry: TelemetryPort | None,
+            audio_extensions: tuple[str, ...] | None = None,
     ) -> None:
         self._blob_storage = blob_storage
         self._transcription = transcription
@@ -80,13 +79,13 @@ class ExtractMeetingUseCase:
             audit.reset_actor(token)
 
     async def __call__(
-        self,
-        *,
-        title: str,
-        started_at: str,
-        blob_url: str,
-        original_filename: str | None = None,
-        meeting_id: str | None = None,
+            self,
+            *,
+            title: str,
+            started_at: str,
+            blob_url: str,
+            original_filename: str | None = None,
+            meeting_id: str | None = None,
     ) -> ExtractionResult:
         if not blob_url:
             raise ExtractionError("blob_url is required.", status_code=400)
@@ -128,6 +127,7 @@ class ExtractMeetingUseCase:
             if context.meeting_id:
                 self._meetings_repo.update_meeting_status(context.meeting_id, MeetingStatus.COMPLETED.value)
             return result
+
     async def _persist_original_file(self, ctx: IngestedFile) -> str | None:
         if ctx.blob_url:
             return ctx.blob_url
@@ -161,10 +161,10 @@ class ExtractMeetingUseCase:
             raise ExtractionError(f"Extraction failed: {exc}", status_code=500) from exc
 
     async def _store(
-        self,
-        ctx: IngestedFile,
-        transcript: str,
-        result: ExtractionResult,
+            self,
+            ctx: IngestedFile,
+            transcript: str,
+            result: ExtractionResult,
     ) -> tuple[str, str]:
         def _persist() -> tuple[str, str]:
             return self._meetings_repo.store_meeting_and_result(
@@ -183,12 +183,12 @@ class ExtractMeetingUseCase:
             raise ExtractionError(f"Failed to persist results: {exc}", status_code=500) from exc
 
     async def _log(
-        self,
-        meeting_id: str,
-        run_id: str,
-        transcript: str,
-        result: ExtractionResult,
-        transcript_blob_uri: str | None,
+            self,
+            meeting_id: str,
+            run_id: str,
+            transcript: str,
+            result: ExtractionResult,
+            transcript_blob_uri: str | None,
     ) -> None:
         if not self._telemetry:
             return

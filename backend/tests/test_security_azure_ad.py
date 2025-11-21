@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-import time
-
 import jwt
 import pytest
+import time
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
