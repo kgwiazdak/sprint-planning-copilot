@@ -1,25 +1,42 @@
-FROM python:3.11-slim
+# Build stage - use Poetry to export dependencies
+FROM python:3.11-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
-    PYTHONUNBUFFERED=1 \
     POETRY_VERSION=2.2.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_NO_INTERACTION=1 \
-    PATH="$POETRY_HOME/bin:$PATH"
+    POETRY_NO_INTERACTION=1
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends libasound2 ca-certificates ffmpeg \
- && rm -rf /var/lib/apt/lists/*
-
-RUN python3 -m pip install --upgrade pip \
- && python3 -m pip install "poetry==${POETRY_VERSION}"
+RUN pip install --upgrade pip \
+ && pip install "poetry==${POETRY_VERSION}" \
+ && poetry self add poetry-plugin-export
 
 WORKDIR /app
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry config virtualenvs.create false \
- && poetry install --only main --no-root
+RUN poetry export -f requirements.txt -o requirements.txt --without-hashes --only main
 
+# Runtime stage - minimal image
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Install only runtime dependencies
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+    libasound2 \
+    ca-certificates \
+    ffmpeg \
+ && rm -rf /var/lib/apt/lists/* \
+ && apt-get clean
+
+WORKDIR /app
+
+# Copy requirements from builder and install
+COPY --from=builder /app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+ && rm requirements.txt
+
+# Copy application code
 COPY backend backend
 COPY data data
 
