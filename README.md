@@ -6,7 +6,7 @@
 
 ## Demo
 
-<img src="data/edited_video.gif" alt="Sprint Planning Copilot demo" width="900"/>
+<img src="data/edited_video_optimized.gif" alt="Sprint Planning Copilot demo" width="900"/>
 
 ## What Does It Do?
 
