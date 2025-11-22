@@ -2,13 +2,12 @@ import {useMemo, useState} from 'react';
 import type {
     GridColDef,
     GridPaginationModel,
-    GridRenderCellParams,
     GridRenderEditCellParams,
     GridRowId,
     GridRowSelectionModel,
 } from '@mui/x-data-grid';
 import {DataGrid} from '@mui/x-data-grid';
-import {Autocomplete, Chip, Link, MenuItem, Stack, TextField, Typography,} from '@mui/material';
+import {Box, Chip, MenuItem, TextField, Typography,} from '@mui/material';
 import {useSnackbar} from 'notistack';
 import {useUpdateTask} from '../../api/hooks';
 import type {Task, User} from '../../types';
@@ -23,18 +22,8 @@ type TasksTableProps = {
     onSelectionChange?: (selection: string[]) => void;
     onRowDoubleClick?: (task: Task) => void;
     checkboxSelection?: boolean;
+    hideFooter?: boolean;
 };
-
-const LabelsEditCell = (params: GridRenderEditCellParams<Task>) => (
-    <Autocomplete
-        multiple
-        freeSolo
-        options={[]}
-        value={params.value ?? []}
-        onChange={(_event, value) => params.api.setEditCellValue({id: params.id, field: params.field, value})}
-        renderInput={(textFieldProps) => <TextField {...textFieldProps} placeholder="Add label"/>}
-    />
-);
 
 const SelectEditCell = (
     params: GridRenderEditCellParams<Task>,
@@ -75,9 +64,6 @@ const NumberEditCell = (params: GridRenderEditCellParams<Task>) => (
     />
 );
 
-const areArraysEqual = (a: string[], b: string[]) =>
-    a.length === b.length && a.every((value, index) => value === b[index]);
-
 export const TasksTable = ({
                                tasks,
                                users = [],
@@ -86,6 +72,7 @@ export const TasksTable = ({
                                onSelectionChange,
                                onRowDoubleClick,
                                checkboxSelection = true,
+                               hideFooter = false,
                            }: TasksTableProps) => {
     const {enqueueSnackbar} = useSnackbar();
     const updateTask = useUpdateTask();
@@ -114,9 +101,11 @@ export const TasksTable = ({
             flex: 1,
             editable: true,
             renderCell: (params) => (
-                <Typography variant="body2">
-                    {users.find((user) => user.id === params.value)?.displayName ?? 'Unassigned'}
-                </Typography>
+                <Box sx={{display: 'flex', alignItems: 'center', height: '100%'}}>
+                    <Typography variant="body2">
+                        {users.find((user) => user.id === params.value)?.displayName ?? 'Unassigned'}
+                    </Typography>
+                </Box>
             ),
             renderEditCell: (params) => (
                 <TextField
@@ -163,26 +152,6 @@ export const TasksTable = ({
             renderEditCell: NumberEditCell,
         },
         {
-            field: 'labels',
-            headerName: 'Labels',
-            flex: 1,
-            sortable: false,
-            editable: true,
-            renderCell: (params: GridRenderCellParams<Task>) => (
-                <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                    {(params.value as string[] | undefined)?.map((label: string) => (
-                        <Chip
-                            key={`${params.id}-${label}`}
-                            label={label}
-                            size="small"
-                            sx={{mb: 0.5}}
-                        />
-                    ))}
-                </Stack>
-            ),
-            renderEditCell: LabelsEditCell,
-        },
-        {
             field: 'status',
             headerName: 'Status',
             flex: 0.5,
@@ -200,30 +169,6 @@ export const TasksTable = ({
                 />
             ),
         },
-        {
-            field: 'jiraIssueKey',
-            headerName: 'Jira Issue',
-            width: 140,
-            sortable: false,
-            renderCell: (params) =>
-                params.value ? (
-                    params.row.jiraIssueUrl ? (
-                        <Link
-                            href={params.row.jiraIssueUrl ?? undefined}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            {params.value}
-                        </Link>
-                    ) : (
-                        <Typography variant="body2">{params.value}</Typography>
-                    )
-                ) : (
-                    <Typography variant="body2" color="text.secondary">
-                        —
-                    </Typography>
-                ),
-        },
     ];
 
     const processRowUpdate = async (newRow: Task, oldRow: Task) => {
@@ -235,9 +180,6 @@ export const TasksTable = ({
         if (newRow.priority !== oldRow.priority) changes.priority = newRow.priority;
         if (newRow.storyPoints !== oldRow.storyPoints)
             changes.storyPoints = newRow.storyPoints;
-        if (!areArraysEqual(newRow.labels ?? [], oldRow.labels ?? []))
-            changes.labels = [...(newRow.labels ?? [])];
-
         if (Object.keys(changes).length === 0) {
             return oldRow;
         }
@@ -278,6 +220,9 @@ export const TasksTable = ({
             paginationModel={paginationModel}
             onPaginationModelChange={setPaginationModel}
             pageSizeOptions={[10, 20, 50]}
+            hideFooter={hideFooter}
+            hideFooterPagination={hideFooter}
+            hideFooterSelectedRowCount={hideFooter}
             sx={(theme) => ({
                 backgroundColor: 'transparent',
                 border: 'none',
@@ -298,6 +243,15 @@ export const TasksTable = ({
             onRowDoubleClick={(params) =>
                 onRowDoubleClick?.(params.row as Task)
             }
+            onColumnHeaderClick={(params, event) => {
+                if (params.field === '__check__') {
+                    event.preventDefault();
+                    const allIds = tasks.map((t) => t.id);
+                    const nextSelection =
+                        selectedIds.length === tasks.length ? [] : allIds;
+                    onSelectionChange?.(nextSelection);
+                }
+            }}
             slots={{
                 noRowsOverlay: () => (
                     <Typography variant="body2" sx={{p: 2}}>

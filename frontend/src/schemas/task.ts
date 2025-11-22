@@ -17,7 +17,6 @@ export const TaskSchema = z.object({
         .positive('Story points must be positive')
         .optional(),
     assigneeId: z.string().optional(),
-    labels: z.array(z.string().min(1, 'Label cannot be empty')),
     status: z.enum(taskStatusOptions),
     sourceQuote: z.string().optional(),
 });
@@ -29,7 +28,6 @@ export const TaskUpdateSchema = TaskSchema.pick({
     priority: true,
     storyPoints: true,
     assigneeId: true,
-    labels: true,
     status: true,
 });
 

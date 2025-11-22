@@ -132,36 +132,36 @@ export const MeetingTasksPage = () => {
             {meeting && (
                 <Paper
                     sx={{
-                        p: 3,
-                        mb: 3,
-                        borderRadius: 3,
+                        p: 2,
+                        mb: 2,
+                        borderRadius: 2.5,
                     }}
                 >
                     <Stack
                         direction={{xs: 'column', sm: 'row'}}
-                        spacing={3}
+                        spacing={2}
                         alignItems={{xs: 'flex-start', sm: 'center'}}
                         justifyContent="space-between"
                     >
-                        <Stack spacing={0.5}>
+                        <Stack spacing={0.25}>
                             <Typography variant="overline" color="text.secondary">
                                 Meeting metadata
                             </Typography>
-                            <Typography variant="body1">{meeting.id}</Typography>
+                            <Typography variant="body2">{meeting.id}</Typography>
                             <Typography variant="body2" color="text.secondary">
                                 {formatDateTime(meeting.startedAt)}
                             </Typography>
                         </Stack>
-                        <Stack direction="row" spacing={3}>
-                            <Stack spacing={0.5}>
+                        <Stack direction="row" spacing={2}>
+                            <Stack spacing={0.25}>
                                 <Typography variant="overline" color="text.secondary">
                                     Draft tasks
                                 </Typography>
-                                <Typography variant="h5" fontWeight={700}>
+                                <Typography variant="h6" fontWeight={700}>
                                     {meeting.draftTaskCount ?? 0}
                                 </Typography>
                             </Stack>
-                            <Stack spacing={0.5}>
+                            <Stack spacing={0.25}>
                                 <Typography variant="overline" color="text.secondary">
                                     Status
                                 </Typography>
@@ -211,20 +211,10 @@ export const MeetingTasksPage = () => {
                         selectedIds={selectedIds}
                         onSelectionChange={setSelectedIds}
                         onRowDoubleClick={(task) => setDrawerTaskId(task.id)}
+                        hideFooter
                     />
                 </Box>
             </Paper>
-            <Stack direction="row" spacing={2} mt={2}>
-                <Button
-                    variant="outlined"
-                    disabled={selectedIds.length !== 1}
-                    onClick={() =>
-                        selectedIds.length === 1 && navigate(`/tasks/${selectedIds[0]}/edit`)
-                    }
-                >
-                    Edit task
-                </Button>
-            </Stack>
             <TaskDrawer
                 open={Boolean(drawerTaskId)}
                 taskId={drawerTaskId}

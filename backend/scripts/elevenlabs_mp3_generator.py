@@ -11,31 +11,46 @@ client = ElevenLabs(
 )
 
 VOICES = {
-    "PM": "cgSgspJ2msm6clMCkdW9",
-    "DEV": "JBFqnCBsd6RMkjVDRZzb",
-    "DS": "onwK4e9ZLuTAKqWW03F9"
+    "Adrian_Puchacki": "cgSgspJ2msm6clMCkdW9",
+    # Waldemar: keep a neutral/mid male voice (override with WALDEMAR_WALASIK_VOICE_ID if desired).
+    "Waldemar_Walasik": os.getenv("WALDEMAR_WALASIK_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb"),
+    # Wojciech: use a very different timbre (default to a brighter/female voice) to maximize separation.
+    "Wojciech_Puczyk": os.getenv("WOJCIECH_PUCZYK_VOICE_ID", "21m00Tcm4TlvDq8ikWAM"),
 }
 
 conversation = [
-    ("PM", "Morning team! I want to review whats left before we release the updated model."),
-    ("DEV",
-     "Sure. Ive already refactored the data-ingestion pipeline, but training still takes around four hours on Azure."),
-    ("DS",
-     "Yeah, thats because the preprocessing step is still single-threaded. I can parallelize it with Dask to speed things up."),
-    ("PM", "That would be great. How long do you think thatll take?"),
-    ("DS", "About one day of work, maybe five story points if we use our usual scale."),
-    ("DEV",
-     "Once thats done, Ill update the model registry and redeploy through MLflow. Should we include monitoring for drift this time?"),
-    ("PM", "Yes, please. Lets add an alert if accuracy drops more than three percent."),
-    ("DS", "Got it. Ill also prepare a notebook showing how drift is calculated so QA can validate the numbers."),
-    ("DEV", "Perfect. Ill set up the API endpoint and handle the integration tests."),
-    ("PM", "Awesome. Lets plan to close all related tickets by Thursday and do a quick demo on Friday."),
+    ("Adrian_Puchacki", "Morning team, let's keep this simple. We need four tasks and clear owners."),
+    ("Waldemar_Walasik", "Morning. Training still takes four hours on Azure, even after the ingest refactor."),
+    ("Wojciech_Puczyk", "I can parallelize preprocessing with Dask. Nice and clear: that would be my task."),
+    ("Adrian_Puchacki", "Great, Wojciech owns Dask parallelization. How many points would that be?"),
+    ("Wojciech_Puczyk", "Let's vote it at 5 points. It's mostly wiring and testing."),
+    ("Adrian_Puchacki", "Done. Task one: Wojciech, Dask parallelization, 5 points."),
+    ("Waldemar_Walasik", "After that, I will update the model registry and redeploy via MLflow. That's my task."),
+    ("Adrian_Puchacki", "How many points do you want for the registry and redeploy, Waldemar?"),
+    ("Waldemar_Walasik", "Call it 3 points. Small changes and smoke tests."),
+    ("Adrian_Puchacki", "Good. Task two: Waldemar, registry update plus redeploy, 3 points."),
+    ("Adrian_Puchacki", "We also need drift detection and alerting. Waldemar, do you want that too?"),
+    ("Waldemar_Walasik", "Yes, I'll take drift alerts. Simple rule: alert if accuracy drops more than three percent."),
+    ("Adrian_Puchacki", "Points for drift alerting?"),
+    ("Waldemar_Walasik", "3 points is fine, includes Slack notification and MLflow log."),
+    ("Adrian_Puchacki", "Task three: Waldemar, drift detection and alerting, 3 points."),
+    ("Wojciech_Puczyk", "Do we need a release brief for stakeholders?"),
+    ("Adrian_Puchacki", "Yes, I'll own the release-readiness checklist and brief. Very small."),
+    ("Waldemar_Walasik", "How many points for your brief, Adrian?"),
+    ("Adrian_Puchacki", "1 point. Just making sure it's tracked."),
+    ("Adrian_Puchacki", "Task four: Adrian, release brief and checklist, 1 point."),
+    ("Wojciech_Puczyk", "Recap so we don't mess it up: I own Dask parallelization, 5 points."),
+    ("Waldemar_Walasik", "I own registry plus redeploy for 3 points, and drift alerting for 3 points."),
+    ("Adrian_Puchacki", "And I own the release brief at 1 point. Four tasks total, owners clear."),
+    ("Wojciech_Puczyk", "Timeline: finish by Thursday, quick demo Friday. Let's keep it simple."),
+    ("Waldemar_Walasik", "No extra tasks hiding here. Just these four."),
+    ("Adrian_Puchacki", "Perfect. Thanks—execute and update the board."),
 ]
 
 introduction = [
-    ("PM", "Hello, I'm Jessice, ambitious project manager with a passion for AI-driven solutions. "),
-    ("DEV", "Hi, I'm Alex, a dedicated software developer specializing in building scalable machine learning systems."),
-    ("DS", "Hey, I'm Sam, a data scientist and I know everything about drive business decisions.")
+    ("Adrian_Puchacki", "Hello, I'm Adrian Puchacki, ambitious project manager with a passion for AI-driven solutions. In my free time I like to play football, read books and hiking. I think I'm really good suited for that job as I'm keen to help everybody"),
+    ("Waldemar_Walasik", "Hi, I'm Waldemar Walasik, a dedicated software developer specializing in building scalable machine learning systems. I like basketball, comics and my favourite sitcom is Friends. I'm new technology enjoyer and I know everything about crypto."),
+    ("Wojciech_Puczyk", "Hey, I'm Wojciech Puczyk, a data scientist and I know everything about drive business decisions. 2 years ago I did my first marathon and now it's my passion. I'm running everyday and preparing to run a marathon in every continent in the world.")
 ]
 
 
@@ -51,7 +66,7 @@ def synthesize_line(speaker: str, text: str) -> bytes:
 
 
 full_audio = (synthesize_line(s, t) for s, t in conversation)
-save(full_audio, "data/team_meeting.mp3")
+save(full_audio, "data/newest.mp3")
 
 for s, t in introduction:
     intro_audio = synthesize_line(s, t)

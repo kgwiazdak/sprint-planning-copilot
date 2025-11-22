@@ -1,4 +1,4 @@
-import {Autocomplete, Box, Button, Chip, MenuItem, Stack, TextField, Typography,} from '@mui/material';
+import {Box, Button, MenuItem, Stack, TextField, Typography,} from '@mui/material';
 import {Controller, useForm} from 'react-hook-form';
 import {useEffect} from 'react';
 import {useSnackbar} from 'notistack';
@@ -39,7 +39,6 @@ export const EditTaskForm = ({
             priority: task.priority,
             storyPoints: task.storyPoints,
             assigneeId: task.assigneeId ?? '',
-            labels: task.labels,
             status: task.status,
         },
     });
@@ -52,7 +51,6 @@ export const EditTaskForm = ({
             priority: task.priority,
             storyPoints: task.storyPoints,
             assigneeId: task.assigneeId ?? '',
-            labels: task.labels,
             status: task.status,
         });
     }, [task, reset]);
@@ -185,36 +183,6 @@ export const EditTaskForm = ({
                         )}
                     />
                 </Stack>
-                <Controller
-                    name="labels"
-                    control={control}
-                    render={({field, fieldState}) => (
-                        <Autocomplete
-                            multiple
-                            freeSolo
-                            options={[]}
-                            value={field.value}
-                            onChange={(_event, value) => field.onChange(value)}
-                            renderTags={(value, getTagProps) =>
-                                value.map((option, index) => (
-                                    <Chip
-                                        {...getTagProps({index})}
-                                        key={option}
-                                        label={option}
-                                    />
-                                ))
-                            }
-                            renderInput={(params) => (
-                                <TextField
-                                    {...params}
-                                    label="Labels"
-                                    error={Boolean(fieldState.error)}
-                                    helperText={fieldState.error?.message}
-                                />
-                            )}
-                        />
-                    )}
-                />
                 {task.sourceQuote && (
                     <Box
                         p={2}

@@ -1,14 +1,108 @@
 import json
 import logging
 import os
+import re
 from difflib import SequenceMatcher
+from pathlib import Path
+from typing import Mapping, MutableMapping, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import AzureChatOpenAI, ChatOpenAI
 from pydantic import ValidationError
 
-from backend.schemas import ExtractionResult
+from backend.schemas import ExtractionResult, Task
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_speakers_from_transcript(transcript: str) -> list[str]:
+    """Extract speaker labels from diarized transcript lines.
+
+    Lines look like "Speaker Name: text", where the name comes from intro filenames.
+    """
+    pattern = re.compile(r"^([A-Z][^:]{1,50}):\s", re.MULTILINE)
+    seen: set[str] = set()
+    speakers: list[str] = []
+    for name in pattern.findall(transcript):
+        normalized = name.strip()
+        if normalized and normalized.lower() not in seen:
+            seen.add(normalized.lower())
+            speakers.append(normalized)
+    return speakers
+
+
+def _role_from_intro_filename(path: Path) -> str:
+    """Mirror intro filename parsing used by the transcriber."""
+    stem = path.stem
+    if stem.lower().startswith("intro_"):
+        stem = stem[6:]
+    stem = stem.replace("_", " ").strip()
+    if not stem:
+        return "Speaker"
+
+    def _title_token(token: str) -> str:
+        if "-" not in token:
+            return token.capitalize()
+        return "-".join(part.capitalize() for part in token.split("-") if part)
+
+    parts = [_title_token(token) for token in stem.split() if token]
+    return " ".join(parts) if parts else "Speaker"
+
+
+def _known_voice_names(intro_dir: str | Path | None = None, pattern: str | None = None) -> list[str]:
+    """Return names derived from intro_* files so we can map partial matches to full names."""
+    directory = Path(intro_dir or os.getenv("INTRO_AUDIO_DIR", "data/voices"))
+    glob_pattern = pattern or os.getenv("INTRO_AUDIO_PATTERN", "intro_*.*")
+    if not directory.exists():
+        return []
+    names: list[str] = []
+    seen: set[str] = set()
+    for path in sorted(directory.glob(glob_pattern)):
+        if not path.is_file():
+            continue
+        name = _role_from_intro_filename(path)
+        key = name.lower().strip()
+        if key and key not in seen:
+            seen.add(key)
+            names.append(name)
+    return names
+
+
+def _augment_with_known_voices(extracted: list[str]) -> list[str]:
+    """If only first/last name is present, expand to full name when uniquely resolvable."""
+    known = _known_voice_names()
+    if not known:
+        return extracted
+
+    resolved: list[str] = []
+    seen: set[str] = set()
+
+    def _add(name: str) -> None:
+        norm = name.strip()
+        key = norm.lower()
+        if norm and key not in seen:
+            seen.add(key)
+            resolved.append(norm)
+
+    # Keep original extracted order
+    for name in extracted:
+        _add(name)
+
+    for name in extracted:
+        tokens = name.strip().split()
+        if len(tokens) != 1:
+            continue
+        token = tokens[0].lower()
+        candidates = [
+            full
+            for full in known
+            if full.lower() == token
+            or full.lower().startswith(f"{token} ")
+            or full.lower().endswith(f" {token}")
+        ]
+        if len(candidates) == 1:
+            _add(candidates[0])
+
+    return resolved
 
 
 def _fuzzy_match_speaker(name: str, valid_speakers: list[str], threshold: float = 0.6) -> str | None:
@@ -52,6 +146,8 @@ class LLMExtractor:
     @staticmethod
     def _llm_chain(transcript: str, valid_speakers: list[str] | None = None) -> ExtractionResult:
         provider = os.getenv("LLM_PROVIDER", "azure").lower()
+        if valid_speakers is None:
+            valid_speakers = _augment_with_known_voices(_extract_speakers_from_transcript(transcript))
 
         if provider == "azure":
             api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
@@ -100,7 +196,6 @@ class LLMExtractor:
 
         raw_response = llm.invoke(messages).content
         result = LLMExtractor._parse_or_repair_response(llm, raw_response)
-        # Post-process to validate and normalize assignee names
         return LLMExtractor._validate_assignees(result, valid_speakers)
 
     @staticmethod
@@ -129,7 +224,10 @@ class LLMExtractor:
             data = json.loads(payload)
             return ExtractionResult.model_validate(data)
         except (json.JSONDecodeError, ValidationError) as exc:
-            logger.warning("LLM payload failed validation. Attempting repair.", exc_info=exc)
+            logger.warning("LLM payload failed validation. Attempting salvage/repair.", exc_info=exc)
+            salvaged = LLMExtractor._salvage_tasks(payload)
+            if salvaged:
+                return salvaged
             repair_messages = [
                 SystemMessage(
                     content=(
@@ -152,6 +250,34 @@ class LLMExtractor:
             repaired = llm.invoke(repair_messages).content
             data = json.loads(repaired)
             return ExtractionResult.model_validate(data)
+
+    @staticmethod
+    def _salvage_tasks(payload: str | Mapping[str, Any]) -> ExtractionResult | None:
+        """Best-effort recovery: keep all individually valid tasks even if the whole payload failed."""
+        try:
+            data = json.loads(payload) if isinstance(payload, str) else payload
+        except Exception:
+            return None
+        if not isinstance(data, Mapping):
+            return None
+        raw_tasks = data.get("tasks")
+        if not isinstance(raw_tasks, list):
+            return None
+
+        valid_tasks: list[Task] = []
+        for raw_task in raw_tasks:
+            if not isinstance(raw_task, Mapping):
+                continue
+            # Avoid failing the whole batch due to trivial empty strings
+            sanitized: MutableMapping[str, Any] = dict(raw_task)
+            assignee = sanitized.get("assignee_name")
+            if isinstance(assignee, str) and not assignee.strip():
+                sanitized["assignee_name"] = None
+            try:
+                valid_tasks.append(Task.model_validate(sanitized))
+            except ValidationError:
+                continue
+        return ExtractionResult(tasks=valid_tasks) if valid_tasks else None
 
     def extract(self, transcript: str) -> ExtractionResult:
         return self._llm_chain(transcript)
