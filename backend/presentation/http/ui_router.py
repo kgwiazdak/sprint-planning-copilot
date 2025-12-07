@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import unicodedata
 import uuid
+import urllib.error
+import urllib.request
 from datetime import datetime
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -33,6 +36,10 @@ router = APIRouter(
     prefix="/api",
     tags=["ui"],
     dependencies=[Depends(require_authenticated_user)],
+)
+public_router = APIRouter(
+    prefix="/api/auth",
+    tags=["auth"],
 )
 logger = logging.getLogger(__name__)
 
@@ -76,6 +83,71 @@ class BlobUploadRequest(BaseModel):
     contentType: str | None = None
     meetingId: str | None = None
     expiresIn: int | None = Field(default=3600, ge=60, le=86400)
+
+
+class AtlassianTokenExchange(BaseModel):
+    code: str | None = None
+    codeVerifier: str | None = None
+    redirectUri: str | None = None
+    grantType: Literal["authorization_code", "refresh_token"] = "authorization_code"
+    refreshToken: str | None = None
+
+
+def _post_json(url: str, payload: dict, *, timeout: float = 15.0) -> dict:
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read().decode("utf-8")
+            return json.loads(data) if data else {}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore") or exc.reason or f"HTTP {exc.code}"
+        code = exc.code if 400 <= exc.code < 500 else 502
+        raise HTTPException(status_code=code, detail=detail)
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to reach Atlassian: {exc.reason}") from exc
+
+
+@public_router.post("/atlassian/token")
+def exchange_atlassian_token(payload: AtlassianTokenExchange):
+    settings = get_settings().atlassian_oauth
+    if not settings.client_id or not settings.client_secret:
+        raise HTTPException(status_code=503, detail="Atlassian OAuth client is not configured.")
+
+    if payload.grantType == "authorization_code":
+        if not payload.code or not payload.codeVerifier:
+            raise HTTPException(status_code=400, detail="code and codeVerifier are required.")
+        redirect_uri = payload.redirectUri or settings.redirect_uri
+        if not redirect_uri:
+            raise HTTPException(status_code=400, detail="redirectUri is required.")
+        token_payload = {
+            "grant_type": "authorization_code",
+            "client_id": settings.client_id,
+            "client_secret": settings.client_secret,
+            "code": payload.code,
+            "code_verifier": payload.codeVerifier,
+            "redirect_uri": redirect_uri,
+        }
+    else:
+        if not payload.refreshToken:
+            raise HTTPException(status_code=400, detail="refreshToken is required for refresh_token grant.")
+        token_payload = {
+            "grant_type": "refresh_token",
+            "client_id": settings.client_id,
+            "client_secret": settings.client_secret,
+            "refresh_token": payload.refreshToken,
+        }
+
+    token_response = _post_json("https://auth.atlassian.com/oauth/token", token_payload)
+    return token_response
 
 
 class BlobUploadResponse(BaseModel):

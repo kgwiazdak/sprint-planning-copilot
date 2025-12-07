@@ -80,6 +80,21 @@ class AzureADSettings(BaseModel):
         return bool((self.tenant_id and self.client_id) or self.require_auth)
 
 
+class AtlassianOAuthSettings(BaseModel):
+    client_id: str | None = None
+    client_secret: str | None = None
+    audience: str | None = "api.atlassian.com"
+    issuer: str = "https://auth.atlassian.com"
+    jwks_url: str = "https://auth.atlassian.com/.well-known/jwks.json"
+    jwks: str | None = None
+    redirect_uri: str | None = None
+    require_auth: bool = False
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.client_id or self.require_auth)
+
+
 class AppConfig(BaseModel):
     profile: str = "prod"
     blob_storage: BlobStorageSettings = BlobStorageSettings()
@@ -91,6 +106,7 @@ class AppConfig(BaseModel):
     jira: JiraSettings = JiraSettings()
     queue: QueueSettings = QueueSettings()
     azure_ad: AzureADSettings = AzureADSettings()
+    atlassian_oauth: AtlassianOAuthSettings = AtlassianOAuthSettings()
 
     @classmethod
     def load(cls) -> "AppConfig":
@@ -164,6 +180,16 @@ class AppConfig(BaseModel):
                 jwks=os.getenv("AZURE_AD_JWKS"),
                 scopes=[scope.strip() for scope in os.getenv("AZURE_AD_SCOPES", "").split(",") if scope.strip()],
                 require_auth=os.getenv("AZURE_AD_REQUIRE_AUTH", "false").lower() in {"1", "true", "yes", "on"},
+            ),
+            atlassian_oauth=AtlassianOAuthSettings(
+                client_id=os.getenv("ATLASSIAN_CLIENT_ID"),
+                client_secret=os.getenv("ATLASSIAN_CLIENT_SECRET"),
+                audience=os.getenv("ATLASSIAN_AUDIENCE", "api.atlassian.com"),
+                issuer=os.getenv("ATLASSIAN_ISSUER", "https://auth.atlassian.com"),
+                jwks_url=os.getenv("ATLASSIAN_JWKS_URL", "https://auth.atlassian.com/.well-known/jwks.json"),
+                jwks=os.getenv("ATLASSIAN_JWKS"),
+                redirect_uri=os.getenv("ATLASSIAN_REDIRECT_URI"),
+                require_auth=os.getenv("ATLASSIAN_REQUIRE_AUTH", "false").lower() in {"1", "true", "yes", "on"},
             ),
         )
 

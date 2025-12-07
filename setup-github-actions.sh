@@ -79,22 +79,22 @@ gh secret set ACR_PASSWORD --body "$ACR_PASSWORD"
 echo "✅ ACR_PASSWORD set"
 echo ""
 
-# 6. Azure AD Client ID (Frontend)
-echo "6️⃣ Setting Azure AD Frontend Client ID..."
-gh secret set VITE_AZURE_AD_CLIENT_ID --body "380da0ea-a299-4224-a856-32e88192ccef"
-echo "✅ VITE_AZURE_AD_CLIENT_ID set"
+# 6. Atlassian OAuth (Frontend)
+echo "6️⃣ Setting Atlassian OAuth Client ID..."
+gh secret set VITE_ATLASSIAN_CLIENT_ID --body "your-atlassian-oauth-client-id"
+echo "✅ VITE_ATLASSIAN_CLIENT_ID set"
 echo ""
 
-# 7. Azure AD Tenant ID
-echo "7️⃣ Setting Azure AD Tenant ID..."
-gh secret set VITE_AZURE_AD_TENANT_ID --body "70a47f1e-56e9-4450-8c04-30bf8e62c3e5"
-echo "✅ VITE_AZURE_AD_TENANT_ID set"
+# 7. Atlassian Redirect URI
+echo "7️⃣ Setting Atlassian Redirect URI..."
+gh secret set VITE_ATLASSIAN_REDIRECT_URI --body "https://your-frontend.example.com"
+echo "✅ VITE_ATLASSIAN_REDIRECT_URI set"
 echo ""
 
-# 8. Azure AD Scopes
-echo "8️⃣ Setting Azure AD Scopes..."
-gh secret set VITE_AZURE_AD_SCOPES --body "api://20f2b27b-e2cd-41e7-a193-6b26740c5b53/api.access"
-echo "✅ VITE_AZURE_AD_SCOPES set"
+# 8. Atlassian Scopes
+echo "8️⃣ Setting Atlassian Scopes..."
+gh secret set VITE_ATLASSIAN_SCOPES --body "read:confluence-content.all read:jira-work offline_access"
+echo "✅ VITE_ATLASSIAN_SCOPES set"
 echo ""
 
 echo "=================================================="

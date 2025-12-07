@@ -86,9 +86,13 @@ cp .env.development.sample .env.development
 **Edit `.env.development`** with:
 ```env
 VITE_API_URL=http://localhost:8000/api
-VITE_AZURE_AD_CLIENT_ID=your-client-id      # Optional, for Azure AD auth
-VITE_AZURE_AD_TENANT_ID=your-tenant-id      # Optional
-VITE_AZURE_AD_SCOPES=api://your-api/scope   # Optional
+VITE_ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
+VITE_ATLASSIAN_REDIRECT_URI=http://localhost:4173
+VITE_ATLASSIAN_SCOPES=read:jira-work write:jira-work read:confluence-content.all
+ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
+ATLASSIAN_CLIENT_SECRET=your-atlassian-client-secret
+ATLASSIAN_REDIRECT_URI=http://localhost:4173
+ATLASSIAN_REQUIRE_AUTH=true
 VITE_APP_PROFILE=dev
 ```
 
@@ -161,12 +165,13 @@ MLFLOW_TRACKING_URI=http://localhost:5000
 MLFLOW_EXPERIMENT_NAME=sprint-planning-copilot
 ```
 
-#### **Azure AD Authentication** (Optional)
+#### **Atlassian OAuth (Confluence/Jira login)** (Optional)
 ```env
-AZURE_AD_TENANT_ID=your-tenant-id
-AZURE_AD_CLIENT_ID=your-client-id
-AZURE_AD_AUDIENCE=api://your-api-id
-AZURE_AD_REQUIRE_AUTH=true
+VITE_ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
+VITE_ATLASSIAN_REDIRECT_URI=http://localhost:4173
+VITE_ATLASSIAN_SCOPES=read:confluence-content.all read:jira-work offline_access
+ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
+ATLASSIAN_REQUIRE_AUTH=true
 ```
 
 #### **Development Features**
@@ -472,7 +477,7 @@ Set these in **Settings → Secrets and variables → Actions**:
 - `AZURE_CREDENTIALS` - Service principal JSON
 - `AZURE_SUBSCRIPTION_ID`
 - `ACR_NAME`, `ACR_USERNAME`, `ACR_PASSWORD` - Azure Container Registry
-- `VITE_AZURE_AD_CLIENT_ID`, `VITE_AZURE_AD_TENANT_ID`, `VITE_AZURE_AD_SCOPES`
+- `VITE_ATLASSIAN_CLIENT_ID`, `VITE_ATLASSIAN_REDIRECT_URI`, `VITE_ATLASSIAN_SCOPES`
 
 See [`GITHUB_ACTIONS_SETUP.md`](./GITHUB_ACTIONS_SETUP.md) for detailed setup instructions.
 
@@ -598,11 +603,14 @@ JIRA_EMAIL=bot@company.com
 JIRA_API_TOKEN=your-prod-token
 JIRA_STORY_POINTS_FIELD=customfield_10016
 
-# Azure AD Authentication
-AZURE_AD_TENANT_ID=your-tenant
-AZURE_AD_CLIENT_ID=your-client
-AZURE_AD_AUDIENCE=api://your-api
-AZURE_AD_REQUIRE_AUTH=true
+# Atlassian OAuth (Confluence/Jira login)
+VITE_ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
+VITE_ATLASSIAN_REDIRECT_URI=https://your-frontend.example.com
+VITE_ATLASSIAN_SCOPES=read:jira-work write:jira-work read:confluence-content.all
+ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
+ATLASSIAN_CLIENT_SECRET=your-atlassian-client-secret
+ATLASSIAN_REDIRECT_URI=https://your-frontend.example.com
+ATLASSIAN_REQUIRE_AUTH=true
 
 # MLflow
 MLFLOW_TRACKING_URI=https://mlflow.yourcompany.com
