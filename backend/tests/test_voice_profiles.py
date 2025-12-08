@@ -13,21 +13,29 @@ def _repo(tmp_path: Path) -> SqliteMeetingsRepository:
 
 def test_register_voice_profile_creates_or_updates_user(tmp_path):
     repo = _repo(tmp_path)
-    first_id = repo.register_voice_profile(display_name="Adrian Puchacki", voice_sample_path="data/voices/adrian.mp3")
-    users = repo.list_users()
+    owner_id = "user-1"
+    first_id = repo.register_voice_profile(
+        display_name="Adrian Puchacki", voice_sample_path="data/voices/adrian.mp3", owner_id=owner_id
+    )
+    users = repo.list_users(owner_id=owner_id)
     assert len(users) == 1
     assert users[0]["displayName"] == "Adrian Puchacki"
     assert users[0]["voiceSamplePath"] == "data/voices/adrian.mp3"
 
-    second_id = repo.register_voice_profile(display_name="adrian puchacki", voice_sample_path="data/voices/new.mp3")
+    second_id = repo.register_voice_profile(
+        display_name="adrian puchacki", voice_sample_path="data/voices/new.mp3", owner_id=owner_id
+    )
     assert first_id == second_id
-    users = repo.list_users()
+    users = repo.list_users(owner_id=owner_id)
     assert users[0]["voiceSamplePath"] == "data/voices/new.mp3"
 
 
 def test_store_tasks_only_assigns_known_voice(tmp_path):
     repo = _repo(tmp_path)
-    repo.register_voice_profile(display_name="Alex Johnson", voice_sample_path="data/voices/alex.mp3")
+    owner_id = "user-1"
+    repo.register_voice_profile(
+        display_name="Alex Johnson", voice_sample_path="data/voices/alex.mp3", owner_id=owner_id
+    )
 
     result = ExtractionResult(
         tasks=[
@@ -64,9 +72,10 @@ def test_store_tasks_only_assigns_known_voice(tmp_path):
         title="Weekly sync",
         started_at="2024-01-01T00:00:00Z",
         blob_url="https://blob",
+        owner_id=owner_id,
     )
 
-    tasks = repo.list_tasks(meeting_id="meeting-1")
+    tasks = repo.list_tasks(meeting_id="meeting-1", owner_id=owner_id)
     assert len(tasks) == 2
     assigned = {task["summary"]: task["assigneeId"] for task in tasks}
     assert assigned["Implement auth"] is not None
@@ -75,7 +84,10 @@ def test_store_tasks_only_assigns_known_voice(tmp_path):
 
 def test_update_user_voice_sample(tmp_path):
     repo = _repo(tmp_path)
-    user_id = repo.register_voice_profile(display_name="Carla Ruiz", voice_sample_path="data/voices/carla.mp3")
-    repo.update_user_voice_sample(user_id, "Carla Ruiz", "data/voices/carla_new.mp3")
-    users = repo.list_users()
+    owner_id = "user-1"
+    user_id = repo.register_voice_profile(
+        display_name="Carla Ruiz", voice_sample_path="data/voices/carla.mp3", owner_id=owner_id
+    )
+    repo.update_user_voice_sample(user_id, "Carla Ruiz", "data/voices/carla_new.mp3", owner_id=owner_id)
+    users = repo.list_users(owner_id=owner_id)
     assert users[0]["voiceSamplePath"] == "data/voices/carla_new.mp3"

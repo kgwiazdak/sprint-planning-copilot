@@ -48,7 +48,8 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             started_at TEXT,
             status TEXT DEFAULT 'queued',
             source_url TEXT,
-            source_text TEXT
+            source_text TEXT,
+            owner_id TEXT
         )
         """
     )
@@ -82,6 +83,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             pushed_to_jira_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            owner_id TEXT,
             FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
         )
         """
@@ -93,7 +95,8 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             display_name TEXT NOT NULL,
             email TEXT,
             jira_account_id TEXT,
-            voice_sample_path TEXT
+            voice_sample_path TEXT,
+            owner_id TEXT
         )
         """
     )
@@ -103,6 +106,9 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "tasks", "pushed_to_jira_at", "TEXT")
     _ensure_column(conn, "users", "jira_account_id", "TEXT")
     _ensure_column(conn, "users", "voice_sample_path", "TEXT")
+    _ensure_column(conn, "meetings", "owner_id", "TEXT")
+    _ensure_column(conn, "tasks", "owner_id", "TEXT")
+    _ensure_column(conn, "users", "owner_id", "TEXT")
     conn.commit()
 
 

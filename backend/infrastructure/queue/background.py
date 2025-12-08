@@ -19,11 +19,15 @@ class BackgroundMeetingImportQueue(MeetingImportQueuePort):
     async def enqueue(self, job: MeetingImportJob) -> None:
         await self._queue.put(job)
         if not self._worker_task or self._worker_task.done():
+            logger.info("Starting background import worker for meeting %s", job.meeting_id)
             self._worker_task = asyncio.create_task(self._worker())
 
     async def _worker(self) -> None:
-        while not self._queue.empty():
-            job = await self._queue.get()
+        while True:
+            try:
+                job = await self._queue.get()
+            except asyncio.CancelledError:
+                return
             try:
                 await self._handler(job)
             except Exception:  # pragma: no cover - best effort logging

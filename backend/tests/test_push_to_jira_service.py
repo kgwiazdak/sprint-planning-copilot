@@ -12,16 +12,16 @@ class FakeRepo:
         self.marked: list[tuple[str, str, str | None]] = []
         self.users = users or {}
 
-    def get_tasks_by_ids(self, ids):
+    def get_tasks_by_ids(self, ids, *, owner_id: str):
         return [task for task in self._tasks if task["id"] in ids]
 
-    def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None) -> None:
+    def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None, owner_id: str) -> None:
         self.marked.append((task_id, issue_key, issue_url))
 
-    def get_user(self, user_id: str):
+    def get_user(self, user_id: str, *, owner_id: str):
         return self.users.get(user_id)
 
-    def update_user_jira_account(self, user_id: str, account_id: str) -> None:
+    def update_user_jira_account(self, user_id: str, account_id: str, *, owner_id: str) -> None:
         if user_id in self.users:
             self.users[user_id]["jiraAccountId"] = account_id
 
@@ -58,7 +58,7 @@ def test_pushes_tasks_and_marks_repository():
     jira = FakeJiraClient()
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
-    result = service.push([task["id"]])
+    result = service.push([task["id"]], owner_id="owner-1")
 
     assert result.pushed == 1
     assert result.skipped == 0
@@ -77,7 +77,7 @@ def test_skips_tasks_already_linked_to_jira():
     jira = FakeJiraClient()
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
-    result = service.push([task["id"]])
+    result = service.push([task["id"]], owner_id="owner-1")
 
     assert result.pushed == 0
     assert result.skipped == 1
@@ -96,7 +96,7 @@ def test_raises_when_jira_rejects_request():
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
     with pytest.raises(JiraClientError):
-        service.push([task["id"]])
+        service.push([task["id"]], owner_id="owner-1")
     assert repo.marked == []
 
 
@@ -110,7 +110,7 @@ def test_sanitizes_labels_before_pushing():
     jira = FakeJiraClient()
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
-    service.push([task["id"]])
+    service.push([task["id"]], owner_id="owner-1")
 
     assert jira.calls[0]["labels"] == ["data-ingestion", "model-drift", "qa-ops"]
 
@@ -129,7 +129,7 @@ def test_looks_up_jira_account_when_missing(tmp_path=None):
     jira.lookup["Sam Carter"] = "jira-user-123"
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
-    service.push([task["id"]])
+    service.push([task["id"]], owner_id="owner-1")
 
     assert repo.users["user-42"]["jiraAccountId"] == "jira-user-123"
     assert jira.calls[0]["assignee_account_id"] == "jira-user-123"

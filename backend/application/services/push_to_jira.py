@@ -25,12 +25,12 @@ class PushTasksToJiraService:
         self._repo = repo
         self._jira = jira_client
 
-    def push(self, task_ids: Iterable[str]) -> PushTasksResult:
+    def push(self, task_ids: Iterable[str], *, owner_id: str) -> PushTasksResult:
         ids = [task_id for task_id in task_ids if task_id]
         if not ids:
             return PushTasksResult(total=0, pushed=0, skipped=0)
 
-        tasks = self._repo.get_tasks_by_ids(ids)
+        tasks = self._repo.get_tasks_by_ids(ids, owner_id=owner_id)
         pushed = 0
         skipped = 0
         for task in tasks:
@@ -40,12 +40,13 @@ class PushTasksToJiraService:
                 continue
             assignee_account_id = task.get("assigneeAccountId")
             if not assignee_account_id:
-                assignee_account_id = self._resolve_assignee_account(task)
+                assignee_account_id = self._resolve_assignee_account(task, owner_id=owner_id)
             issue = self._create_issue(task, assignee_account_id=assignee_account_id)
             self._repo.mark_task_pushed_to_jira(
                 task["id"],
                 issue_key=issue.key,
                 issue_url=issue.url,
+                owner_id=owner_id,
             )
             pushed += 1
         return PushTasksResult(total=len(tasks), pushed=pushed, skipped=skipped)
@@ -79,11 +80,11 @@ class PushTasksToJiraService:
                 sanitized.append(slug[:255])
         return sanitized
 
-    def _resolve_assignee_account(self, task: dict) -> str | None:
+    def _resolve_assignee_account(self, task: dict, *, owner_id: str) -> str | None:
         user_id = task.get("assigneeId")
         if not user_id:
             return None
-        user = self._repo.get_user(user_id)
+        user = self._repo.get_user(user_id, owner_id=owner_id)
         if not user:
             return None
         account_id = user.get("jiraAccountId")
@@ -98,5 +99,5 @@ class PushTasksToJiraService:
             logger.exception("Failed to resolve Jira account for %s", display_name)
             return None
         if account_id:
-            self._repo.update_user_jira_account(user_id, account_id)
+            self._repo.update_user_jira_account(user_id, account_id, owner_id=owner_id)
         return account_id

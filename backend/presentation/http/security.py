@@ -4,7 +4,6 @@ import json
 import jwt
 import time
 import urllib.request
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -182,7 +181,6 @@ def _get_atlassian_validator() -> AtlassianTokenValidator | None:
     return _atlassian_validator
 
 
-@asynccontextmanager
 async def require_authenticated_user(
         credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
@@ -201,7 +199,6 @@ async def require_authenticated_user(
             yield user
         finally:
             audit.reset_actor(audit_token)
-        return
 
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization header missing.")

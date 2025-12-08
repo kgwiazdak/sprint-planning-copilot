@@ -74,6 +74,7 @@ class ExtractMeetingUseCase:
                 blob_url=job.blob_url,
                 original_filename=job.original_filename,
                 meeting_id=job.meeting_id,
+                owner_id=job.owner_id,
             )
         finally:
             audit.reset_actor(token)
@@ -86,46 +87,57 @@ class ExtractMeetingUseCase:
             blob_url: str,
             original_filename: str | None = None,
             meeting_id: str | None = None,
+            owner_id: str | None = None,
     ) -> ExtractionResult:
-        if not blob_url:
-            raise ExtractionError("blob_url is required.", status_code=400)
-        if not self._blob_storage:
-            raise ExtractionError("Blob storage is not configured.", status_code=500)
-
-        payload = await self._blob_storage.download_blob(blob_url)
-        if not payload:
-            raise ExtractionError("Referenced blob is empty.", status_code=400)
-
-        context = IngestedFile(
-            meeting_id=meeting_id or str(uuid.uuid4()),
-            filename=original_filename or Path(blob_url).name or "uploaded_file",
-            content_type=None,
-            payload=payload,
-            title=title,
-            started_at=started_at,
-            blob_url=blob_url,
-        )
-
-        if context.meeting_id:
-            self._meetings_repo.update_meeting_status(context.meeting_id, MeetingStatus.PROCESSING.value)
+        effective_owner = owner_id or None
+        context_meeting_id = meeting_id or str(uuid.uuid4())
+        if context_meeting_id:
+            self._meetings_repo.update_meeting_status(
+                context_meeting_id, MeetingStatus.PROCESSING.value, owner_id=effective_owner
+            )
 
         try:
+            if not blob_url:
+                raise ExtractionError("blob_url is required.", status_code=400)
+            if not self._blob_storage:
+                raise ExtractionError("Blob storage is not configured.", status_code=500)
+
+            payload = await self._blob_storage.download_blob(blob_url)
+            if not payload:
+                raise ExtractionError("Referenced blob is empty.", status_code=400)
+
+            context = IngestedFile(
+                meeting_id=context_meeting_id,
+                filename=original_filename or Path(blob_url).name or "uploaded_file",
+                content_type=None,
+                payload=payload,
+                title=title,
+                started_at=started_at,
+                blob_url=blob_url,
+            )
+
             transcript_blob_uri = await self._persist_original_file(context)
             transcript = await self._resolve_transcript(context)
             result = await self._extract(transcript)
-            run_meeting_id, run_id = await self._store(context, transcript, result)
+            run_meeting_id, run_id = await self._store(context, transcript, result, owner_id=effective_owner)
             await self._log(run_meeting_id, run_id, transcript, result, transcript_blob_uri)
         except ExtractionError:
-            if context.meeting_id:
-                self._meetings_repo.update_meeting_status(context.meeting_id, MeetingStatus.FAILED.value)
+            if context_meeting_id:
+                self._meetings_repo.update_meeting_status(
+                    context_meeting_id, MeetingStatus.FAILED.value, owner_id=effective_owner
+                )
             raise
         except Exception as exc:
-            if context.meeting_id:
-                self._meetings_repo.update_meeting_status(context.meeting_id, MeetingStatus.FAILED.value)
+            if context_meeting_id:
+                self._meetings_repo.update_meeting_status(
+                    context_meeting_id, MeetingStatus.FAILED.value, owner_id=effective_owner
+                )
             raise ExtractionError(f"Unexpected failure: {exc}", status_code=500) from exc
         else:
-            if context.meeting_id:
-                self._meetings_repo.update_meeting_status(context.meeting_id, MeetingStatus.COMPLETED.value)
+            if context_meeting_id:
+                self._meetings_repo.update_meeting_status(
+                    context_meeting_id, MeetingStatus.COMPLETED.value, owner_id=effective_owner
+                )
             return result
 
     async def _persist_original_file(self, ctx: IngestedFile) -> str | None:
@@ -165,6 +177,8 @@ class ExtractMeetingUseCase:
             ctx: IngestedFile,
             transcript: str,
             result: ExtractionResult,
+            *,
+            owner_id: str | None,
     ) -> tuple[str, str]:
         def _persist() -> tuple[str, str]:
             return self._meetings_repo.store_meeting_and_result(
@@ -175,6 +189,7 @@ class ExtractMeetingUseCase:
                 title=ctx.title,
                 started_at=ctx.started_at,
                 blob_url=ctx.blob_url,
+                owner_id=owner_id,
             )
 
         try:

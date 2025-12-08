@@ -82,7 +82,11 @@ class VoiceSamplesSyncService:
         return " ".join(parts) if parts else None
 
 
-def register_voice_samples(repo: MeetingsRepositoryPort, samples: Iterable[VoiceSample]) -> None:
+def register_voice_samples(repo: MeetingsRepositoryPort, samples: Iterable[VoiceSample], *, owner_id: str) -> None:
     """Ensure every downloaded voice sample has a matching user row."""
     for sample in samples:
-        repo.register_voice_profile(display_name=sample.display_name, voice_sample_path=str(sample.local_path))
+        repo.register_voice_profile(
+            display_name=sample.display_name,
+            voice_sample_path=str(sample.local_path),
+            owner_id=owner_id,
+        )

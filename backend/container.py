@@ -7,6 +7,7 @@ from pathlib import Path
 
 from backend.application.services.voice_profiles import VoiceSamplesSyncService, register_voice_samples
 from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase
+from backend.domain.ports import TranscriptionPort
 from backend.infrastructure.jira import JiraClient
 from backend.infrastructure.llm.task_extractor import LLMExtractor
 from backend.infrastructure.persistence.cosmos import CosmosMeetingsRepository
@@ -26,6 +27,30 @@ from backend.infrastructure.transcription.azure_conversation import (
 from backend.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+class MockTranscriber(TranscriptionPort):
+    """Lightweight transcriber used when MOCK_TRANSCRIBER is enabled."""
+
+    SUPPORTED_AUDIO_EXTENSIONS: tuple[str, ...] = (
+        ".wav",
+        ".mp3",
+        ".m4a",
+        ".aac",
+        ".wma",
+        ".ogg",
+        ".flac",
+    )
+
+    def __init__(self, transcript: str | None = None) -> None:
+        default = (
+            "Team discussed sprint goals, backlog grooming, owners for actions, "
+            "and follow-ups on blockers and demo prep."
+        )
+        self._transcript = transcript.strip() if transcript else default
+
+    def transcribe(self, content: bytes, filename: str) -> str:
+        return self._transcript
 
 
 @lru_cache(maxsize=1)
@@ -51,7 +76,9 @@ def get_worker_blob_storage() -> BlobStorageService | None:
 
 
 @lru_cache(maxsize=1)
-def get_transcriber() -> AzureConversationTranscriber | None:
+def get_transcriber() -> TranscriptionPort | None:
+    if os.getenv("MOCK_TRANSCRIBER", "").lower() in {"1", "true", "yes", "on"}:
+        return MockTranscriber(os.getenv("MOCK_TRANSCRIPT_TEXT"))
     cfg = get_settings().azure_speech
     if not cfg.key or not cfg.region:
         return None
@@ -128,11 +155,18 @@ def get_meeting_queue():
         connection_string = queue_cfg.connection_string or settings.blob_storage.connection_string
         queue_name = queue_cfg.queue_name
     if connection_string and queue_name:
-        return AzureMeetingImportQueue(
-            connection_string=connection_string,
-            queue_name=queue_name,
-        )
-    logger.warning("Azure queue configuration missing; falling back to in-process queue")
+        try:
+            return AzureMeetingImportQueue(
+                connection_string=connection_string,
+                queue_name=queue_name,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(
+                "Falling back to in-process queue because Azure queue init failed: %s",
+                exc,
+            )
+    else:
+        logger.warning("Azure queue configuration missing; falling back to in-process queue")
     use_case = get_extract_use_case()
     return BackgroundMeetingImportQueue(use_case.process_job)
 
@@ -190,7 +224,7 @@ def _ensure_intro_samples_dir() -> Path:
         )
         samples = syncer.sync()
         if samples:
-            register_voice_samples(get_meetings_repository(), samples)
+            register_voice_samples(get_meetings_repository(), samples, owner_id="system")
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("Failed to synchronize intro samples: %s", exc)
     return target

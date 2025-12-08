@@ -51,6 +51,7 @@ async def test_azure_queue_serializes_job_payload():
         started_at="2024-11-01T10:00:00Z",
         blob_url="https://blob",
         original_filename="sync.txt",
+        owner_id="owner-1",
     )
 
     await queue.enqueue(job)
@@ -70,6 +71,7 @@ async def test_azure_queue_worker_processes_payload_and_deletes_message():
         started_at="2024-11-05T09:00:00Z",
         blob_url="https://blob",
         original_filename=None,
+        owner_id="owner-1",
     )
     await queue.enqueue(job)
 
@@ -107,6 +109,7 @@ async def test_worker_extends_visibility_for_long_running_jobs():
         started_at="2024-11-05T09:00:00Z",
         blob_url="https://blob",
         original_filename=None,
+        owner_id="owner-1",
     )
     await queue.enqueue(job)
 

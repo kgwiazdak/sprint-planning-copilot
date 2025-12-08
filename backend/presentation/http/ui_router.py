@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import Literal
+from typing import Annotated, Literal
 
 from backend.application.commands.meeting_import import MeetingImportPayload, SubmitMeetingImportCommand
 from backend.application.services.push_to_jira import PushTasksToJiraService
@@ -29,19 +29,20 @@ from backend.presentation.http.dependencies import (
     submit_import_command,
     worker_blob_storage_service,
 )
-from backend.presentation.http.security import require_authenticated_user
+from backend.presentation.http.security import AuthenticatedUser, require_authenticated_user
 from backend.settings import get_settings
 
 router = APIRouter(
     prefix="/api",
     tags=["ui"],
-    dependencies=[Depends(require_authenticated_user)],
 )
 public_router = APIRouter(
     prefix="/api/auth",
     tags=["auth"],
 )
 logger = logging.getLogger(__name__)
+
+CurrentUser = Annotated[AuthenticatedUser, Depends(require_authenticated_user)]
 
 
 class MeetingCreate(BaseModel):
@@ -171,77 +172,82 @@ def _repo(repo: MeetingsRepositoryPort = Depends(data_repository)) -> MeetingsRe
 
 
 @router.get("/meetings")
-def list_meetings(repo: MeetingsRepositoryPort = Depends(_repo)):
-    return repo.list_meetings()
+def list_meetings(user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    return repo.list_meetings(owner_id=user.subject)
 
 
 @router.post("/meetings", status_code=201)
-def create_meeting(payload: MeetingCreate, repo: MeetingsRepositoryPort = Depends(_repo)):
+def create_meeting(payload: MeetingCreate, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
     return repo.create_meeting(
         title=payload.title,
         started_at=payload.startedAt,
         source_url=payload.sourceUrl,
         source_text=payload.sourceText,
+        owner_id=user.subject,
     )
 
 
 @router.get("/meetings/{meeting_id}")
-def get_meeting(meeting_id: str, repo: MeetingsRepositoryPort = Depends(_repo)):
-    meeting = repo.get_meeting(meeting_id)
+def get_meeting(meeting_id: str, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    meeting = repo.get_meeting(meeting_id, owner_id=user.subject)
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
     return meeting
 
 
 @router.patch("/meetings/{meeting_id}")
-def update_meeting(meeting_id: str, payload: MeetingUpdate, repo: MeetingsRepositoryPort = Depends(_repo)):
+def update_meeting(
+        meeting_id: str, payload: MeetingUpdate, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)
+):
     try:
         return repo.update_meeting(
             meeting_id,
             title=payload.title,
             started_at=payload.startedAt,
+            owner_id=user.subject,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/meetings/{meeting_id}", status_code=204)
-def delete_meeting(meeting_id: str, repo: MeetingsRepositoryPort = Depends(_repo)):
-    deleted = repo.delete_meeting(meeting_id)
+def delete_meeting(meeting_id: str, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    deleted = repo.delete_meeting(meeting_id, owner_id=user.subject)
     if not deleted:
         raise HTTPException(status_code=404, detail="Meeting not found")
 
 
 @router.get("/meetings/{meeting_id}/tasks")
-def list_meeting_tasks(meeting_id: str, repo: MeetingsRepositoryPort = Depends(_repo)):
-    meeting = repo.get_meeting(meeting_id)
+def list_meeting_tasks(meeting_id: str, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    meeting = repo.get_meeting(meeting_id, owner_id=user.subject)
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
-    return repo.list_tasks(meeting_id=meeting_id)
+    return repo.list_tasks(meeting_id=meeting_id, owner_id=user.subject)
 
 
 @router.get("/tasks")
 def list_tasks(
+        user: CurrentUser,
         status: str | None = Query(default=None),
         repo: MeetingsRepositoryPort = Depends(_repo),
 ):
     if status and status not in TASK_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status filter")
-    return repo.list_tasks(status=status)
+    return repo.list_tasks(status=status, owner_id=user.subject)
 
 
 @router.get("/tasks/{task_id}")
-def get_task(task_id: str, repo: MeetingsRepositoryPort = Depends(_repo)):
-    task = repo.get_task(task_id)
+def get_task(task_id: str, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    task = repo.get_task(task_id, owner_id=user.subject)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
 
 @router.patch("/tasks/{task_id}")
-def update_task(task_id: str, payload: TaskUpdate, repo: MeetingsRepositoryPort = Depends(_repo)):
+def update_task(task_id: str, payload: TaskUpdate, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
     try:
-        return repo.update_task(task_id, payload.model_dump(exclude_unset=True))
+        return repo.update_task(task_id, payload.model_dump(exclude_unset=True), owner_id=user.subject)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -249,30 +255,32 @@ def update_task(task_id: str, payload: TaskUpdate, repo: MeetingsRepositoryPort 
 @router.post("/tasks/bulk-approve")
 def bulk_approve_tasks(
         payload: BulkAction,
+        user: CurrentUser,
         repo: MeetingsRepositoryPort = Depends(_repo),
         jira: JiraClient = Depends(jira_dependency),
 ):
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
     try:
-        result = service.push(payload.ids)
+        result = service.push(payload.ids, owner_id=user.subject)
     except JiraClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"updated": result.pushed, "pushed": result.pushed, "skipped": result.skipped}
 
 
 @router.post("/tasks/bulk-reject")
-def bulk_reject_tasks(payload: BulkAction, repo: MeetingsRepositoryPort = Depends(_repo)):
-    repo.bulk_update_status(payload.ids, "rejected")
-    return {"updated": len(payload.ids)}
+def bulk_reject_tasks(payload: BulkAction, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    updated = repo.bulk_update_status(payload.ids, "rejected", owner_id=user.subject)
+    return {"updated": updated}
 
 
 @router.get("/users")
-def list_users(repo: MeetingsRepositoryPort = Depends(_repo)):
-    return repo.list_users()
+def list_users(user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+    return repo.list_users(owner_id=user.subject)
 
 
 @router.post("/users/voice", response_model=VoiceUploadResponse, status_code=201)
 async def upload_voice_sample(
+        user: CurrentUser,
         displayName: str = Form(..., min_length=1),
         file: UploadFile = File(...),
         userId: str | None = Form(default=None),
@@ -298,23 +306,25 @@ async def upload_voice_sample(
     )
     try:
         if userId:
-            repo.update_user_voice_sample(userId, displayName, str(local_path))
+            repo.update_user_voice_sample(userId, displayName, str(local_path), owner_id=user.subject)
             final_user_id = userId
         else:
-            final_user_id = repo.register_voice_profile(display_name=displayName, voice_sample_path=str(local_path))
+            final_user_id = repo.register_voice_profile(
+                display_name=displayName, voice_sample_path=str(local_path), owner_id=user.subject
+            )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    user = repo.get_user(final_user_id)
+    user_row = repo.get_user(final_user_id, owner_id=user.subject)
     return VoiceUploadResponse(
         userId=final_user_id,
-        displayName=user["displayName"] if user else displayName,
+        displayName=user_row["displayName"] if user_row else displayName,
         voiceSamplePath=str(local_path),
         blobUrl=blob_url,
     )
 
 
 @router.get("/mock/audio")
-def download_mock_audio():
+def download_mock_audio(_user: CurrentUser):
     settings = get_settings()
     if not settings.mock_audio.enabled:
         raise HTTPException(status_code=404, detail="Mock audio disabled.")
@@ -327,6 +337,7 @@ def download_mock_audio():
 @router.post("/uploads/blob", response_model=BlobUploadResponse)
 def create_blob_upload(
         payload: BlobUploadRequest,
+        _user: CurrentUser,
         storage: BlobStorageService = Depends(blob_storage_service),
 ):
     meeting_id = payload.meetingId or str(uuid.uuid4())
@@ -351,17 +362,22 @@ def create_blob_upload(
 @router.post("/meetings/import", status_code=202)
 async def import_meeting(
         payload: MeetingImportRequest,
+        user: CurrentUser,
         command: SubmitMeetingImportCommand = Depends(submit_import_command),
 ):
-    meeting_id = await command.execute(
-        MeetingImportPayload(
-            title=payload.title,
-            started_at=payload.startedAt,
-            blob_url=payload.blobUrl,
-            original_filename=payload.originalFilename,
-            meeting_id=payload.meetingId,
+    try:
+        meeting_id = await command.execute(
+            MeetingImportPayload(
+                title=payload.title,
+                started_at=payload.startedAt,
+                blob_url=payload.blobUrl,
+                original_filename=payload.originalFilename,
+                meeting_id=payload.meetingId,
+                owner_id=user.subject,
+            )
         )
-    )
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"meetingId": meeting_id, "status": "queued"}
 
 

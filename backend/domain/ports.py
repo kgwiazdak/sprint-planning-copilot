@@ -38,8 +38,8 @@ class ExtractionPort(Protocol):
 
 @runtime_checkable
 class MeetingsRepositoryPort(Protocol):
-    def list_meetings(self) -> list[dict[str, Any]]:
-        """Return all meetings with draft counts."""
+    def list_meetings(self, *, owner_id: str) -> list[dict[str, Any]]:
+        """Return all meetings owned by the current user with draft counts."""
 
     def create_meeting(
             self,
@@ -48,49 +48,60 @@ class MeetingsRepositoryPort(Protocol):
             started_at: str,
             source_url: str | None,
             source_text: str | None,
+            owner_id: str,
     ) -> dict[str, Any]:
         """Create a manual meeting entry."""
 
-    def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
+    def get_meeting(self, meeting_id: str, *, owner_id: str) -> dict[str, Any] | None:
         """Fetch a single meeting."""
 
-    def update_meeting(self, meeting_id: str, *, title: str | None, started_at: str | None) -> dict[str, Any]:
+    def update_meeting(
+            self, meeting_id: str, *, title: str | None, started_at: str | None, owner_id: str
+    ) -> dict[str, Any]:
         """Modify meeting metadata."""
 
-    def delete_meeting(self, meeting_id: str) -> bool:
+    def delete_meeting(self, meeting_id: str, *, owner_id: str) -> bool:
         """Remove a meeting and its tasks."""
 
-    def list_tasks(self, *, meeting_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]:
+    def list_tasks(
+            self, *, meeting_id: str | None = None, status: str | None = None, owner_id: str
+    ) -> list[dict[str, Any]]:
         """List tasks optionally filtered by meeting or status."""
 
-    def get_task(self, task_id: str) -> dict[str, Any] | None:
+    def get_task(self, task_id: str, *, owner_id: str) -> dict[str, Any] | None:
         """Fetch a single task."""
 
-    def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def update_task(self, task_id: str, payload: dict[str, Any], *, owner_id: str) -> dict[str, Any]:
         """Apply partial updates to a task."""
 
-    def bulk_update_status(self, ids: Iterable[str], status: str) -> int:
+    def bulk_update_status(self, ids: Iterable[str], status: str, *, owner_id: str) -> int:
         """Update status for multiple tasks."""
 
-    def get_tasks_by_ids(self, ids: Iterable[str]) -> list[dict[str, Any]]:
+    def get_tasks_by_ids(self, ids: Iterable[str], *, owner_id: str) -> list[dict[str, Any]]:
         """Return tasks by ID preserving metadata."""
 
-    def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None) -> None:
+    def mark_task_pushed_to_jira(
+            self, task_id: str, *, issue_key: str, issue_url: str | None, owner_id: str
+    ) -> None:
         """Record Jira issue linkage."""
 
-    def list_users(self) -> list[dict[str, Any]]:
+    def list_users(self, *, owner_id: str) -> list[dict[str, Any]]:
         """Return known users."""
 
-    def register_voice_profile(self, *, display_name: str, voice_sample_path: str | None = None) -> str:
+    def register_voice_profile(
+            self, *, display_name: str, voice_sample_path: str | None = None, owner_id: str
+    ) -> str:
         """Ensure a speaker profile exists."""
 
-    def update_user_voice_sample(self, user_id: str, display_name: str, voice_sample_path: str) -> str:
+    def update_user_voice_sample(
+            self, user_id: str, display_name: str, voice_sample_path: str, *, owner_id: str
+    ) -> str:
         """Update an existing speaker profile with a new sample."""
 
-    def get_user(self, user_id: str) -> dict[str, Any] | None:
+    def get_user(self, user_id: str, *, owner_id: str) -> dict[str, Any] | None:
         """Fetch user by ID."""
 
-    def update_user_jira_account(self, user_id: str, account_id: str) -> None:
+    def update_user_jira_account(self, user_id: str, account_id: str, *, owner_id: str) -> None:
         """Store Jira account linkage."""
 
     def create_meeting_stub(
@@ -100,10 +111,11 @@ class MeetingsRepositoryPort(Protocol):
             title: str,
             started_at: str,
             blob_url: str,
+            owner_id: str,
     ) -> None:
         """Persist an initial queued meeting entry."""
 
-    def update_meeting_status(self, meeting_id: str, status: str) -> None:
+    def update_meeting_status(self, meeting_id: str, status: str, *, owner_id: str | None = None) -> None:
         """Update ingestion status for an existing meeting."""
 
     def store_meeting_and_result(
@@ -116,6 +128,7 @@ class MeetingsRepositoryPort(Protocol):
             title: str | None = None,
             started_at: str | None = None,
             blob_url: str | None = None,
+            owner_id: str | None,
     ) -> tuple[str, str]:
         """Persist transcript and extraction payload and return (meeting_id, run_id)."""
 

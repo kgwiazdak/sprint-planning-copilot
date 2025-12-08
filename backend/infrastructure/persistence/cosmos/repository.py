@@ -89,9 +89,9 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
 
     # --- Meeting queries -------------------------------------------------
 
-    def list_meetings(self) -> list[dict[str, Any]]:
+    def list_meetings(self, *, owner_id: str) -> list[dict[str, Any]]:
         self._audit("list")
-        meetings = list(self._meetings.read_all_items())
+        meetings = [item for item in self._meetings.read_all_items() if item.get("ownerId") == owner_id]
         draft_counts: dict[str, int] = {}
         for item in meetings:
             draft_counts[item["id"]] = self._count_draft_tasks(item["id"])
@@ -101,10 +101,12 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             for item in meetings
         ]
 
-    def get_meeting(self, meeting_id: str) -> dict[str, Any] | None:
+    def get_meeting(self, meeting_id: str, *, owner_id: str) -> dict[str, Any] | None:
         self._audit("get", meeting_id=meeting_id)
         try:
             item = self._meetings.read_item(item=meeting_id, partition_key=meeting_id)
+            if item.get("ownerId") != owner_id:
+                return None
             return self._serialize_meeting(item, self._count_draft_tasks(meeting_id))
         except exceptions.CosmosResourceNotFoundError:
             return None
@@ -116,6 +118,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             started_at: str,
             source_url: str | None,
             source_text: str | None,
+            owner_id: str,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
         self._audit("create", meeting_id=meeting_id)
@@ -129,13 +132,16 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "transcript": source_text,
             "sourceUrl": source_url,
             "sourceText": source_text,
+            "ownerId": owner_id,
         }
         self._meetings.create_item(document)
         return self._serialize_meeting(document, 0)
 
-    def update_meeting(self, meeting_id: str, *, title: str | None, started_at: str | None) -> dict[str, Any]:
+    def update_meeting(
+            self, meeting_id: str, *, title: str | None, started_at: str | None, owner_id: str
+    ) -> dict[str, Any]:
         self._audit("update", meeting_id=meeting_id)
-        existing = self.get_meeting(meeting_id)
+        existing = self.get_meeting(meeting_id, owner_id=owner_id)
         if not existing:
             raise ValueError("Meeting not found")
         updated = existing.copy()
@@ -153,12 +159,16 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
                 "transcript": existing.get("transcript"),
                 "sourceUrl": existing.get("sourceUrl"),
                 "sourceText": existing.get("sourceText"),
+                "ownerId": owner_id,
             }
         )
-        return self.get_meeting(meeting_id)  # refreshed with counts
+        return self.get_meeting(meeting_id, owner_id=owner_id)  # refreshed with counts
 
-    def delete_meeting(self, meeting_id: str) -> bool:
+    def delete_meeting(self, meeting_id: str, *, owner_id: str) -> bool:
         self._audit("delete", meeting_id=meeting_id)
+        existing = self.get_meeting(meeting_id, owner_id=owner_id)
+        if not existing:
+            return False
         try:
             self._meetings.delete_item(item=meeting_id, partition_key=meeting_id)
         except exceptions.CosmosResourceNotFoundError:
@@ -169,7 +179,9 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
 
     # --- Task queries ----------------------------------------------------
 
-    def list_tasks(self, *, meeting_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]:
+    def list_tasks(
+            self, *, meeting_id: str | None = None, status: str | None = None, owner_id: str
+    ) -> list[dict[str, Any]]:
         self._audit("list_tasks", meeting_id=meeting_id, resource="task", details={"status": status})
         filters = []
         params: dict[str, Any] = {}
@@ -179,6 +191,8 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         if status:
             filters.append("c.status = @status")
             params["@status"] = status
+        filters.append("c.ownerId = @ownerId")
+        params["@ownerId"] = owner_id
         where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
         query = f"SELECT * FROM c {where_clause} ORDER BY c.createdAt DESC"
         items = list(
@@ -188,31 +202,36 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
                 enable_cross_partition_query=not meeting_id,
             )
         )
-        assignee_map = self._load_users({item.get("assigneeId") for item in items if item.get("assigneeId")})
+        assignee_map = self._load_users(
+            {item.get("assigneeId") for item in items if item.get("assigneeId")},
+            owner_id=owner_id,
+        )
         return [self._serialize_task(item, assignee_map) for item in items]
 
-    def get_task(self, task_id: str) -> dict[str, Any] | None:
+    def get_task(self, task_id: str, *, owner_id: str) -> dict[str, Any] | None:
         self._audit("get_task", resource="task", details={"task_id": task_id})
-        query = "SELECT * FROM c WHERE c.id = @id"
+        query = "SELECT * FROM c WHERE c.id = @id AND c.ownerId = @ownerId"
         items = list(
             self._tasks.query_items(
                 query=query,
-                parameters=[{"name": "@id", "value": task_id}],
+                parameters=[{"name": "@id", "value": task_id}, {"name": "@ownerId", "value": owner_id}],
                 enable_cross_partition_query=True,
             )
         )
         if not items:
             return None
-        assignee = self._load_users({items[0].get("assigneeId")})
+        assignee = self._load_users({items[0].get("assigneeId")}, owner_id=owner_id)
         return self._serialize_task(items[0], assignee)
 
-    def update_task(self, task_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def update_task(self, task_id: str, payload: dict[str, Any], *, owner_id: str) -> dict[str, Any]:
         self._audit("update_task", resource="task", details={"task_id": task_id})
-        existing = self.get_task(task_id)
+        existing = self.get_task(task_id, owner_id=owner_id)
         if not existing:
             raise ValueError("Task not found")
         meeting_id = existing["meetingId"]
         task_doc = self._tasks.read_item(task_id, partition_key=meeting_id)
+        if task_doc.get("ownerId") not in (None, owner_id):
+            raise ValueError("Task not found")
         allowed = {
             "summary": "summary",
             "description": "description",
@@ -231,42 +250,44 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         if not updated:
             return existing
         task_doc["updatedAt"] = utc_now_iso()
+        task_doc["ownerId"] = task_doc.get("ownerId") or owner_id
         self._tasks.upsert_item(task_doc)
-        return self.get_task(task_id)
+        return self.get_task(task_id, owner_id=owner_id)
 
-    def bulk_update_status(self, ids: Iterable[str], status: str) -> int:
+    def bulk_update_status(self, ids: Iterable[str], status: str, *, owner_id: str) -> int:
         ids_list = list(ids)
         self._audit("bulk_update_status", resource="task", details={"ids": ids_list, "status": status})
         updated = 0
         now = utc_now_iso()
-        for task in self.get_tasks_by_ids(ids_list):
+        for task in self.get_tasks_by_ids(ids_list, owner_id=owner_id):
             meeting_id = task["meetingId"]
             doc = self._tasks.read_item(task["id"], partition_key=meeting_id)
             doc["status"] = status
             doc["updatedAt"] = now
+            doc["ownerId"] = doc.get("ownerId") or owner_id
             self._tasks.upsert_item(doc)
             updated += 1
         return updated
 
-    def get_tasks_by_ids(self, ids: Iterable[str]) -> list[dict[str, Any]]:
+    def get_tasks_by_ids(self, ids: Iterable[str], *, owner_id: str) -> list[dict[str, Any]]:
         self._audit("get_tasks_by_ids", resource="task", details={"ids": list(ids)})
         found: list[dict[str, Any]] = []
         unique_ids = {task_id for task_id in ids if task_id}
         if not unique_ids:
             return []
         for task_id in unique_ids:
-            task = self.get_task(task_id)
+            task = self.get_task(task_id, owner_id=owner_id)
             if task:
                 found.append(task)
         return found
 
-    def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None) -> None:
+    def mark_task_pushed_to_jira(self, task_id: str, *, issue_key: str, issue_url: str | None, owner_id: str) -> None:
         self._audit(
             "mark_task_pushed_to_jira",
             resource="task",
             details={"task_id": task_id, "issue_key": issue_key, "issue_url": issue_url},
         )
-        task = self.get_task(task_id)
+        task = self.get_task(task_id, owner_id=owner_id)
         if not task:
             raise ValueError("Task not found")
         doc = self._tasks.read_item(task_id, partition_key=task["meetingId"])
@@ -275,10 +296,11 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         doc["jiraIssueUrl"] = issue_url
         doc["pushedToJiraAt"] = utc_now_iso()
         doc["updatedAt"] = doc["pushedToJiraAt"]
+        doc["ownerId"] = doc.get("ownerId") or owner_id
         self._tasks.upsert_item(doc)
 
-    def list_users(self) -> list[dict[str, Any]]:
-        users = list(self._users.read_all_items())
+    def list_users(self, *, owner_id: str) -> list[dict[str, Any]]:
+        users = [user for user in self._users.read_all_items() if user.get("ownerId") == owner_id]
         return [
             {
                 "id": user["id"],
@@ -290,9 +312,11 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             for user in users
         ]
 
-    def get_user(self, user_id: str) -> dict[str, Any] | None:
+    def get_user(self, user_id: str, *, owner_id: str) -> dict[str, Any] | None:
         try:
             doc = self._users.read_item(item=user_id, partition_key=user_id)
+            if doc.get("ownerId") != owner_id:
+                return None
             return {
                 "id": doc["id"],
                 "displayName": doc.get("displayName"),
@@ -302,8 +326,10 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         except exceptions.CosmosResourceNotFoundError:
             return None
 
-    def update_user_jira_account(self, user_id: str, account_id: str) -> None:
+    def update_user_jira_account(self, user_id: str, account_id: str, *, owner_id: str) -> None:
         doc = self._users.read_item(item=user_id, partition_key=user_id)
+        if doc.get("ownerId") != owner_id:
+            raise ValueError("User not found")
         doc["jiraAccountId"] = account_id
         self._users.upsert_item(doc)
 
@@ -316,9 +342,16 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             title: str,
             started_at: str,
             blob_url: str,
+            owner_id: str,
     ) -> None:
         self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
         now = utc_now_iso()
+        try:
+            existing = self._meetings.read_item(item=meeting_id, partition_key=meeting_id)
+            if existing.get("ownerId") not in (None, owner_id):
+                raise ValueError("Meeting already exists for a different user")
+        except exceptions.CosmosResourceNotFoundError:
+            existing = None
         document = {
             "id": meeting_id,
             "title": title,
@@ -326,16 +359,21 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "createdAt": now,
             "status": MeetingStatus.QUEUED.value,
             "sourceUrl": blob_url,
+            "ownerId": owner_id,
         }
         self._meetings.upsert_item(document)
 
-    def update_meeting_status(self, meeting_id: str, status: str) -> None:
+    def update_meeting_status(self, meeting_id: str, status: str, *, owner_id: str | None = None) -> None:
         self._audit("status_change", meeting_id=meeting_id, details={"status": status})
-        meeting = self.get_meeting(meeting_id)
-        if not meeting:
+        try:
+            doc = self._meetings.read_item(item=meeting_id, partition_key=meeting_id)
+        except exceptions.CosmosResourceNotFoundError:
             return
-        doc = self._meetings.read_item(item=meeting_id, partition_key=meeting_id)
+        if owner_id and doc.get("ownerId") != owner_id:
+            return
         doc["status"] = status
+        if owner_id and not doc.get("ownerId"):
+            doc["ownerId"] = owner_id
         self._meetings.upsert_item(doc)
 
     def store_meeting_and_result(
@@ -348,6 +386,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             title: str | None = None,
             started_at: str | None = None,
             blob_url: str | None = None,
+            owner_id: str | None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
         self._audit(
@@ -356,6 +395,15 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             details={"filename": filename, "tasks": len(result_model.tasks)},
         )
         now = utc_now_iso()
+        try:
+            existing_doc = self._meetings.read_item(item=meeting_id, partition_key=meeting_id)
+            existing_owner = existing_doc.get("ownerId")
+            final_owner = owner_id or existing_owner
+            if existing_owner and owner_id and existing_owner != owner_id:
+                raise ValueError("Meeting belongs to a different user")
+        except exceptions.CosmosResourceNotFoundError:
+            existing_doc = None
+            final_owner = owner_id
         meeting_doc = {
             "id": meeting_id,
             "title": title or filename,
@@ -365,6 +413,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "transcript": transcript,
             "sourceUrl": blob_url,
             "sourceText": transcript,
+            "ownerId": final_owner,
         }
         self._meetings.upsert_item(meeting_doc)
         self._delete_tasks_for_meeting(meeting_id)
@@ -384,7 +433,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             assignee_name = getattr(task, "assignee_name", None)
             assignee_id = None
             if assignee_name:
-                assignee_id = self.register_voice_profile(display_name=assignee_name)
+                assignee_id = self.register_voice_profile(display_name=assignee_name, owner_id=final_owner or owner_id or "system")
             task_doc = {
                 "id": str(uuid.uuid4()),
                 "meetingId": meeting_id,
@@ -402,16 +451,19 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
                 "updatedAt": now,
                 "jiraIssueKey": None,
                 "jiraIssueUrl": None,
+                "ownerId": owner_id,
             }
             self._tasks.upsert_item(task_doc)
         return meeting_id, run_id
 
-    def register_voice_profile(self, *, display_name: str, voice_sample_path: str | None = None) -> str:
+    def register_voice_profile(
+            self, *, display_name: str, voice_sample_path: str | None = None, owner_id: str
+    ) -> str:
         normalized = display_name.strip()
         if not normalized:
             raise ValueError("display_name is required")
-        query = "SELECT * FROM c WHERE LOWER(c.displayName) = @name"
-        params = [{"name": "@name", "value": normalized.lower()}]
+        query = "SELECT * FROM c WHERE LOWER(c.displayName) = @name AND c.ownerId = @ownerId"
+        params = [{"name": "@name", "value": normalized.lower()}, {"name": "@ownerId", "value": owner_id}]
         existing = list(
             self._users.query_items(
                 query=query,
@@ -431,11 +483,14 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
                 "id": user_id,
                 "displayName": normalized,
                 "voiceSamplePath": voice_sample_path,
+                "ownerId": owner_id,
             }
         )
         return user_id
 
-    def update_user_voice_sample(self, user_id: str, display_name: str, voice_sample_path: str) -> str:
+    def update_user_voice_sample(
+            self, user_id: str, display_name: str, voice_sample_path: str, *, owner_id: str
+    ) -> str:
         normalized = display_name.strip()
         if not normalized:
             raise ValueError("display_name is required")
@@ -443,6 +498,8 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             doc = self._users.read_item(item=user_id, partition_key=user_id)
         except exceptions.CosmosResourceNotFoundError:
             raise ValueError("User not found") from None
+        if doc.get("ownerId") != owner_id:
+            raise ValueError("User not found")
         doc["displayName"] = normalized
         doc["voiceSamplePath"] = voice_sample_path
         self._users.upsert_item(doc)
@@ -482,13 +539,15 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "pushedToJiraAt": item.get("pushedToJiraAt"),
         }
 
-    def _load_users(self, user_ids: set[str | None]) -> dict[str, dict[str, Any]]:
+    def _load_users(self, user_ids: set[str | None], owner_id: str | None = None) -> dict[str, dict[str, Any]]:
         result: dict[str, dict[str, Any]] = {}
         for user_id in user_ids:
             if not user_id:
                 continue
             try:
                 doc = self._users.read_item(item=user_id, partition_key=user_id)
+                if owner_id and doc.get("ownerId") not in (owner_id, None, "system"):
+                    continue
                 result[user_id] = doc
             except exceptions.CosmosResourceNotFoundError:
                 continue

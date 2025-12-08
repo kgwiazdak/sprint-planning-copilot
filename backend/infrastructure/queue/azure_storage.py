@@ -97,6 +97,8 @@ class AzureQueueWorker:
         renewal_task: asyncio.Task[None] | None = None
         try:
             job_data = json.loads(message.content)
+            if "owner_id" not in job_data:
+                job_data["owner_id"] = job_data.get("ownerId") or "anonymous"
             job = MeetingImportJob(**job_data)
         except Exception:  # pragma: no cover - safety net
             logger.exception("Invalid queue payload; deleting message")

@@ -13,6 +13,7 @@ class MeetingImportPayload:
     title: str
     started_at: str
     blob_url: str
+    owner_id: str
     meeting_id: str | None = None
     original_filename: str | None = None
 
@@ -36,6 +37,7 @@ class SubmitMeetingImportCommand:
             title=payload.title,
             started_at=payload.started_at,
             blob_url=payload.blob_url,
+            owner_id=payload.owner_id,
         )
         job = MeetingImportJob(
             meeting_id=meeting_id,
@@ -43,7 +45,8 @@ class SubmitMeetingImportCommand:
             started_at=payload.started_at,
             blob_url=payload.blob_url,
             original_filename=payload.original_filename,
+            owner_id=payload.owner_id,
         )
         await self._queue.enqueue(job)
-        self._repo.update_meeting_status(meeting_id, MeetingStatus.QUEUED.value)
+        self._repo.update_meeting_status(meeting_id, MeetingStatus.QUEUED.value, owner_id=payload.owner_id)
         return meeting_id
