@@ -49,6 +49,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
             status TEXT DEFAULT 'queued',
             source_url TEXT,
             source_text TEXT,
+            project_key TEXT,
             owner_id TEXT
         )
         """
@@ -106,6 +107,7 @@ def _init_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "tasks", "pushed_to_jira_at", "TEXT")
     _ensure_column(conn, "users", "jira_account_id", "TEXT")
     _ensure_column(conn, "users", "voice_sample_path", "TEXT")
+    _ensure_column(conn, "meetings", "project_key", "TEXT")
     _ensure_column(conn, "meetings", "owner_id", "TEXT")
     _ensure_column(conn, "tasks", "owner_id", "TEXT")
     _ensure_column(conn, "users", "owner_id", "TEXT")

@@ -72,6 +72,7 @@ class ExtractMeetingUseCase:
                 title=job.title,
                 started_at=job.started_at,
                 blob_url=job.blob_url,
+                project_key=getattr(job, "project_key", None),
                 original_filename=job.original_filename,
                 meeting_id=job.meeting_id,
                 owner_id=job.owner_id,
@@ -88,6 +89,7 @@ class ExtractMeetingUseCase:
             original_filename: str | None = None,
             meeting_id: str | None = None,
             owner_id: str | None = None,
+            project_key: str | None = None,
     ) -> ExtractionResult:
         effective_owner = owner_id or None
         context_meeting_id = meeting_id or str(uuid.uuid4())
@@ -119,7 +121,13 @@ class ExtractMeetingUseCase:
             transcript_blob_uri = await self._persist_original_file(context)
             transcript = await self._resolve_transcript(context)
             result = await self._extract(transcript)
-            run_meeting_id, run_id = await self._store(context, transcript, result, owner_id=effective_owner)
+            run_meeting_id, run_id = await self._store(
+                context,
+                transcript,
+                result,
+                owner_id=effective_owner,
+                project_key=project_key,
+            )
             await self._log(run_meeting_id, run_id, transcript, result, transcript_blob_uri)
         except ExtractionError:
             if context_meeting_id:
@@ -179,6 +187,7 @@ class ExtractMeetingUseCase:
             result: ExtractionResult,
             *,
             owner_id: str | None,
+            project_key: str | None,
     ) -> tuple[str, str]:
         def _persist() -> tuple[str, str]:
             return self._meetings_repo.store_meeting_and_result(
@@ -189,6 +198,7 @@ class ExtractMeetingUseCase:
                 title=ctx.title,
                 started_at=ctx.started_at,
                 blob_url=ctx.blob_url,
+                project_key=project_key,
                 owner_id=owner_id,
             )
 

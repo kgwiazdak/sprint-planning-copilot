@@ -48,6 +48,7 @@ class MeetingsRepositoryPort(Protocol):
             started_at: str,
             source_url: str | None,
             source_text: str | None,
+            project_key: str | None,
             owner_id: str,
     ) -> dict[str, Any]:
         """Create a manual meeting entry."""
@@ -111,6 +112,7 @@ class MeetingsRepositoryPort(Protocol):
             title: str,
             started_at: str,
             blob_url: str,
+            project_key: str | None,
             owner_id: str,
     ) -> None:
         """Persist an initial queued meeting entry."""
@@ -128,6 +130,7 @@ class MeetingsRepositoryPort(Protocol):
             title: str | None = None,
             started_at: str | None = None,
             blob_url: str | None = None,
+            project_key: str | None = None,
             owner_id: str | None,
     ) -> tuple[str, str]:
         """Persist transcript and extraction payload and return (meeting_id, run_id)."""

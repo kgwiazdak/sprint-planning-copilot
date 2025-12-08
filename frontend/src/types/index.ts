@@ -8,6 +8,7 @@ export interface Meeting {
     startedAt: string;
     status: MeetingStatus;
     draftTaskCount: number;
+    projectKey?: string | null;
 }
 
 export type IssueType = 'Story' | 'Task' | 'Bug' | 'Spike';
@@ -38,4 +39,9 @@ export interface User {
     email?: string;
     jiraAccountId?: string;
     voiceSamplePath?: string;
+}
+
+export interface JiraProject {
+    key: string;
+    name: string;
 }

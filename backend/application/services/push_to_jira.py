@@ -25,12 +25,15 @@ class PushTasksToJiraService:
         self._repo = repo
         self._jira = jira_client
 
-    def push(self, task_ids: Iterable[str], *, owner_id: str) -> PushTasksResult:
+    def push(self, task_ids: Iterable[str], *, owner_id: str, project_key: str | None = None) -> PushTasksResult:
         ids = [task_id for task_id in task_ids if task_id]
         if not ids:
             return PushTasksResult(total=0, pushed=0, skipped=0)
 
         tasks = self._repo.get_tasks_by_ids(ids, owner_id=owner_id)
+        target_project = project_key or self._jira.default_project_key
+        if not target_project:
+            raise JiraClientError("Jira project key is required to push tasks.")
         pushed = 0
         skipped = 0
         for task in tasks:
@@ -41,7 +44,7 @@ class PushTasksToJiraService:
             assignee_account_id = task.get("assigneeAccountId")
             if not assignee_account_id:
                 assignee_account_id = self._resolve_assignee_account(task, owner_id=owner_id)
-            issue = self._create_issue(task, assignee_account_id=assignee_account_id)
+            issue = self._create_issue(task, assignee_account_id=assignee_account_id, project_key=target_project)
             self._repo.mark_task_pushed_to_jira(
                 task["id"],
                 issue_key=issue.key,
@@ -51,7 +54,7 @@ class PushTasksToJiraService:
             pushed += 1
         return PushTasksResult(total=len(tasks), pushed=pushed, skipped=skipped)
 
-    def _create_issue(self, task: dict, *, assignee_account_id: str | None) -> JiraIssue:
+    def _create_issue(self, task: dict, *, assignee_account_id: str | None, project_key: str) -> JiraIssue:
         try:
             labels = self._sanitize_labels(task.get("labels") or [])
             return self._jira.create_issue(
@@ -63,6 +66,7 @@ class PushTasksToJiraService:
                 assignee_account_id=assignee_account_id,
                 story_points=task.get("storyPoints"),
                 source_quote=task.get("sourceQuote"),
+                project_key=project_key,
             )
         except JiraClientError:
             logger.exception("Failed to push task %s to Jira", task.get("id"))

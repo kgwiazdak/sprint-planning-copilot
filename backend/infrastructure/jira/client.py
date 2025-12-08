@@ -17,6 +17,12 @@ class JiraIssue:
     url: str
 
 
+@dataclass
+class JiraProject:
+    key: str
+    name: str
+
+
 class JiraClient:
     """Tiny Jira REST API adapter that creates backlog items from approved tasks."""
 
@@ -26,12 +32,12 @@ class JiraClient:
             base_url: str,
             email: str,
             api_token: str,
-            project_key: str,
+            project_key: str | None = None,
             story_points_field: str | None = None,
             timeout: float = 20.0,
     ) -> None:
-        if not base_url or not email or not api_token or not project_key:
-            raise ValueError("Jira client requires base_url, email, api_token and project_key.")
+        if not base_url or not email or not api_token:
+            raise ValueError("Jira client requires base_url, email and api_token.")
         self._base_url = base_url.rstrip("/")
         self._api_base = f"{self._base_url}/rest/api/3"
         self._project_key = project_key
@@ -51,7 +57,11 @@ class JiraClient:
             assignee_account_id: str | None,
             story_points: int | None,
             source_quote: str | None,
+            project_key: str | None = None,
     ) -> JiraIssue:
+        target_project = project_key or self._project_key
+        if not target_project:
+            raise JiraClientError("Jira project key is required to create issues.")
         payload = {
             "fields": self._build_fields(
                 summary=summary,
@@ -62,6 +72,7 @@ class JiraClient:
                 assignee_account_id=assignee_account_id,
                 story_points=story_points,
                 source_quote=source_quote,
+                project_key=target_project,
             )
         }
         data = self._request("POST", "/issue", payload)
@@ -82,11 +93,12 @@ class JiraClient:
             assignee_account_id: str | None,
             story_points: int | None,
             source_quote: str | None,
+            project_key: str,
     ) -> dict[str, Any]:
         summary_text = (summary or "").strip() or "Untitled task"
         fields: dict[str, Any] = {
             "summary": summary_text[:254],
-            "project": {"key": self._project_key},
+            "project": {"key": project_key},
             "issuetype": {"name": issue_type or "Task"},
             "priority": {"name": priority or "Medium"},
         }
@@ -157,3 +169,18 @@ class JiraClient:
         if isinstance(data, list) and data:
             return data[0].get("accountId")
         return None
+
+    def list_projects(self, *, max_results: int = 50) -> list[JiraProject]:
+        query = parse.urlencode({"maxResults": max_results, "orderBy": "key"})
+        data = self._request("GET", f"/project/search?{query}", None)
+        projects: list[JiraProject] = []
+        for item in data.get("values", []) if isinstance(data, dict) else []:
+            key = item.get("key")
+            name = item.get("name")
+            if key and name:
+                projects.append(JiraProject(key=key, name=name))
+        return projects
+
+    @property
+    def default_project_key(self) -> str | None:
+        return self._project_key

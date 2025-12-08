@@ -27,7 +27,8 @@ class FakeRepo:
 
 
 class FakeJiraClient:
-    def __init__(self) -> None:
+    def __init__(self, project_key: str | None = "SCRUM") -> None:
+        self._project_key = project_key
         self.calls: list[dict] = []
         self.counter = 0
         self.lookup: dict[str, str] = {}
@@ -40,6 +41,10 @@ class FakeJiraClient:
 
     def find_user_account_id(self, display_name: str) -> str | None:
         return self.lookup.get(display_name)
+
+    @property
+    def default_project_key(self) -> str | None:
+        return self._project_key
 
 
 def test_pushes_tasks_and_marks_repository():
@@ -96,7 +101,7 @@ def test_raises_when_jira_rejects_request():
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
     with pytest.raises(JiraClientError):
-        service.push([task["id"]], owner_id="owner-1")
+        service.push([task["id"]], owner_id="owner-1", project_key="PRJ")
     assert repo.marked == []
 
 
@@ -133,3 +138,24 @@ def test_looks_up_jira_account_when_missing(tmp_path=None):
 
     assert repo.users["user-42"]["jiraAccountId"] == "jira-user-123"
     assert jira.calls[0]["assignee_account_id"] == "jira-user-123"
+
+
+def test_uses_explicit_project_when_provided():
+    task = {"id": "task-3", "summary": "Explicit project"}
+    repo = FakeRepo([task])
+    jira = FakeJiraClient(project_key="DEF")
+    service = PushTasksToJiraService(repo=repo, jira_client=jira)
+
+    service.push([task["id"]], owner_id="owner-1", project_key="ALT")
+
+    assert jira.calls[0]["project_key"] == "ALT"
+
+
+def test_raises_when_no_project_available():
+    task = {"id": "task-4", "summary": "No project key"}
+    repo = FakeRepo([task])
+    jira = FakeJiraClient(project_key=None)
+    service = PushTasksToJiraService(repo=repo, jira_client=jira)
+
+    with pytest.raises(JiraClientError):
+        service.push([task["id"]], owner_id="owner-1")

@@ -22,6 +22,7 @@ export const NewMeetingForm = () => {
             await createMeeting.mutateAsync({
                 title: values.title,
                 startedAt: new Date(values.startedAt).toISOString(),
+                projectKey: values.projectKey,
                 file,
             });
             enqueueSnackbar('Meeting created', {variant: 'success'});

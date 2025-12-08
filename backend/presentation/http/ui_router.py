@@ -50,6 +50,7 @@ class MeetingCreate(BaseModel):
     startedAt: str
     sourceUrl: str | None = None
     sourceText: str | None = None
+    projectKey: str | None = None
 
 
 class MeetingUpdate(BaseModel):
@@ -72,6 +73,10 @@ class BulkAction(BaseModel):
     ids: list[str] = Field(default_factory=list)
 
 
+class BulkApproveRequest(BulkAction):
+    projectKey: str | None = Field(default=None, min_length=1)
+
+
 class VoiceUploadResponse(BaseModel):
     userId: str
     displayName: str
@@ -92,6 +97,11 @@ class AtlassianTokenExchange(BaseModel):
     redirectUri: str | None = None
     grantType: Literal["authorization_code", "refresh_token"] = "authorization_code"
     refreshToken: str | None = None
+
+
+class JiraProjectResponse(BaseModel):
+    key: str
+    name: str
 
 
 def _post_json(url: str, payload: dict, *, timeout: float = 15.0) -> dict:
@@ -165,6 +175,7 @@ class MeetingImportRequest(BaseModel):
     blobUrl: str = Field(..., min_length=1)
     originalFilename: str | None = None
     meetingId: str | None = None
+    projectKey: str | None = None
 
 
 def _repo(repo: MeetingsRepositoryPort = Depends(data_repository)) -> MeetingsRepositoryPort:
@@ -183,6 +194,7 @@ def create_meeting(payload: MeetingCreate, user: CurrentUser, repo: MeetingsRepo
         started_at=payload.startedAt,
         source_url=payload.sourceUrl,
         source_text=payload.sourceText,
+        project_key=payload.projectKey,
         owner_id=user.subject,
     )
 
@@ -254,14 +266,17 @@ def update_task(task_id: str, payload: TaskUpdate, user: CurrentUser, repo: Meet
 
 @router.post("/tasks/bulk-approve")
 def bulk_approve_tasks(
-        payload: BulkAction,
+        payload: BulkApproveRequest,
         user: CurrentUser,
         repo: MeetingsRepositoryPort = Depends(_repo),
         jira: JiraClient = Depends(jira_dependency),
 ):
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
     try:
-        result = service.push(payload.ids, owner_id=user.subject)
+        project_key = payload.projectKey or jira.default_project_key
+        if not project_key:
+            raise HTTPException(status_code=400, detail="Jira project key is required.")
+        result = service.push(payload.ids, owner_id=user.subject, project_key=project_key)
     except JiraClientError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return {"updated": result.pushed, "pushed": result.pushed, "skipped": result.skipped}
@@ -276,6 +291,15 @@ def bulk_reject_tasks(payload: BulkAction, user: CurrentUser, repo: MeetingsRepo
 @router.get("/users")
 def list_users(user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
     return repo.list_users(owner_id=user.subject)
+
+
+@router.get("/jira/projects", response_model=list[JiraProjectResponse])
+def list_jira_projects(user: CurrentUser, jira: JiraClient = Depends(jira_dependency)):
+    try:
+        projects = jira.list_projects()
+    except JiraClientError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return [JiraProjectResponse(key=project.key, name=project.name) for project in projects]
 
 
 @router.post("/users/voice", response_model=VoiceUploadResponse, status_code=201)
@@ -373,6 +397,7 @@ async def import_meeting(
                 blob_url=payload.blobUrl,
                 original_filename=payload.originalFilename,
                 meeting_id=payload.meetingId,
+                project_key=payload.projectKey,
                 owner_id=user.subject,
             )
         )

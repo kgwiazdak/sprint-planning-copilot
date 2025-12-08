@@ -1,4 +1,4 @@
-import {Badge, Box, Button, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,} from '@mui/material';
+import {Badge, Box, Button, CircularProgress, MenuItem, Paper, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,} from '@mui/material';
 import type {TaskStatus} from '../types';
 
 type StatusFilter = TaskStatus | 'all';
@@ -8,13 +8,18 @@ type DataGridToolbarProps = {
     selectionCount: number;
     onApproveSelected?: () => void;
     onRejectSelected?: () => void;
-    onApproveAll?: () => void;
-    onRejectAll?: () => void;
     disableActions?: boolean;
+    disableApprove?: boolean;
+    disableReject?: boolean;
     statusFilter?: StatusFilter;
     onStatusFilterChange?: (status: StatusFilter) => void;
     search?: string;
     onSearchChange?: (value: string) => void;
+    projectOptions?: Array<{value: string; label: string}>;
+    projectValue?: string;
+    projectError?: string;
+    projectLoading?: boolean;
+    onProjectChange?: (value: string) => void;
     variant?: 'card' | 'inline';
 };
 
@@ -23,13 +28,18 @@ export const DataGridToolbar = ({
                                     selectionCount,
                                     onApproveSelected,
                                     onRejectSelected,
-                                    onApproveAll,
-                                    onRejectAll,
                                     disableActions,
+                                    disableApprove = disableActions,
+                                    disableReject = disableActions,
                                     statusFilter = 'all',
                                     onStatusFilterChange,
                                     search = '',
                                     onSearchChange,
+                                    projectOptions = [],
+                                    projectValue,
+                                    projectError,
+                                    projectLoading = false,
+                                    onProjectChange,
                                     variant = 'card',
                                 }: DataGridToolbarProps) => {
     const isInline = variant === 'inline';
@@ -73,6 +83,34 @@ export const DataGridToolbar = ({
                 flexGrow={1}
                 justifyContent="flex-end"
             >
+                {onProjectChange && (
+                    <TextField
+                        select
+                        size="small"
+                        label="Jira project"
+                        value={projectValue ?? ''}
+                        onChange={(event) => onProjectChange(event.target.value)}
+                        sx={{minWidth: {xs: '100%', md: 220}}}
+                        disabled={projectLoading || projectOptions.length === 0}
+                        error={Boolean(projectError)}
+                        helperText={projectError}
+                        SelectProps={{displayEmpty: true}}
+                        InputProps={{
+                            endAdornment: projectLoading ? (
+                                <CircularProgress size={16} sx={{mr: 1}}/>
+                            ) : undefined,
+                        }}
+                    >
+                        <MenuItem value="" disabled>
+                            {projectLoading ? 'Loading projects…' : 'Select a project'}
+                        </MenuItem>
+                        {projectOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </TextField>
+                )}
                 {onSearchChange && (
                     <TextField
                         size="small"
@@ -96,20 +134,6 @@ export const DataGridToolbar = ({
                         <ToggleButton value="rejected">Rejected</ToggleButton>
                     </ToggleButtonGroup>
                 )}
-                {(onApproveAll || onRejectAll) && (
-                    <Box display="flex" gap={1} flexWrap="wrap">
-                        {onRejectAll && (
-                            <Button variant="text" color="inherit" onClick={onRejectAll}>
-                                Reject All
-                            </Button>
-                        )}
-                        {onApproveAll && (
-                            <Button variant="text" onClick={onApproveAll}>
-                                Approve All
-                            </Button>
-                        )}
-                    </Box>
-                )}
                 {(onApproveSelected || onRejectSelected) && (
                     <Box display="flex" gap={1} flexWrap="wrap">
                         {onRejectSelected && (
@@ -117,7 +141,7 @@ export const DataGridToolbar = ({
                                 variant="outlined"
                                 color="inherit"
                                 onClick={onRejectSelected}
-                                disabled={disableActions}
+                                disabled={disableReject}
                             >
                                 Reject
                             </Button>
@@ -127,7 +151,7 @@ export const DataGridToolbar = ({
                                 variant="contained"
                                 color="primary"
                                 onClick={onApproveSelected}
-                                disabled={disableActions}
+                                disabled={disableApprove}
                             >
                                 Approve
                             </Button>

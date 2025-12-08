@@ -6,6 +6,7 @@ const isBrowserFile = (value: unknown): value is File =>
 export const MeetingSchema = z.object({
     title: z.string().min(3, 'Title must be at least 3 characters'),
     startedAt: z.string().min(1, 'Start time is required'),
+    projectKey: z.string().min(1, 'Project is required'),
     file: z
         .any()
         .refine((value): value is File => isBrowserFile(value), {

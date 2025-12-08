@@ -195,7 +195,7 @@ def get_meeting_queue_worker() -> AzureQueueWorker | None:
 @lru_cache(maxsize=1)
 def get_jira_client() -> JiraClient | None:
     cfg = get_settings().jira
-    if not cfg.base_url or not cfg.email or not cfg.api_token or not cfg.project_key:
+    if not cfg.base_url or not cfg.email or not cfg.api_token:
         return None
     try:
         return JiraClient(

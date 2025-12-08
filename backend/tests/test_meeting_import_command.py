@@ -11,11 +11,14 @@ from backend.domain.entities import MeetingImportJob
 
 @dataclass
 class StubRepo:
-    stub_calls: list[tuple[str, str, str, str]] | None = None
+    stub_calls: list[tuple[str, str, str, str, str | None]] | None = None
     status: tuple[str, str] | None = None
 
-    def create_meeting_stub(self, *, meeting_id: str, title: str, started_at: str, blob_url: str, owner_id: str) -> None:
-        self.stub_calls = [(meeting_id, title, started_at, blob_url, owner_id)]
+    def create_meeting_stub(
+            self, *, meeting_id: str, title: str, started_at: str, blob_url: str, project_key: str | None,
+            owner_id: str
+    ) -> None:
+        self.stub_calls = [(meeting_id, title, started_at, blob_url, owner_id, project_key)]
 
     def update_meeting_status(self, meeting_id: str, status: str, *, owner_id: str | None = None) -> None:
         self.status = (meeting_id, status, owner_id)
@@ -45,11 +48,12 @@ async def _run_submit_command():
             blob_url="https://blob/url",
             meeting_id="abc",
             original_filename="demo.mp3",
+            project_key="SCRUM",
             owner_id="owner-1",
         )
     )
 
     assert meeting_id == "abc"
-    assert repo.stub_calls == [("abc", "Demo", "2024-10-05T10:00:00Z", "https://blob/url", "owner-1")]
+    assert repo.stub_calls == [("abc", "Demo", "2024-10-05T10:00:00Z", "https://blob/url", "owner-1", "SCRUM")]
     assert queue.jobs and queue.jobs[0].meeting_id == "abc"
     assert queue.jobs[0].owner_id == "owner-1"

@@ -1,11 +1,12 @@
-import {useState} from 'react';
-import {Button, FormHelperText, Stack, TextField, Typography} from '@mui/material';
+import {useEffect, useMemo, useState} from 'react';
+import {Button, FormHelperText, MenuItem, Stack, TextField, Typography} from '@mui/material';
 import {Controller, useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import type {MeetingFormValues} from '../../schemas/meeting';
 import {MeetingSchema} from '../../schemas/meeting';
 import {useSnackbar} from 'notistack';
 import {apiClient} from '../../api/client';
+import {useJiraProjects} from '../../api/hooks';
 
 type MeetingFormProps = {
     defaultValues?: Partial<MeetingFormValues>;
@@ -27,18 +28,41 @@ export const MeetingForm = ({
     const isDevProfile =
         (import.meta.env.VITE_APP_PROFILE || '').toLowerCase() === 'dev';
     const {
+        data: projects = [],
+        isLoading: projectsLoading,
+        isError: projectsError,
+    } = useJiraProjects();
+    const projectOptions = useMemo(
+        () =>
+            projects.map((project) => ({
+                value: project.key,
+                label: `${project.name} (${project.key})`,
+            })),
+        [projects],
+    );
+    const {
         control,
         handleSubmit,
         formState: {isValid},
+        watch,
+        setValue,
     } = useForm<MeetingFormValues>({
         resolver: zodResolver(MeetingSchema),
         mode: 'onChange',
         defaultValues: {
             title: '',
             startedAt: new Date().toISOString().slice(0, 16),
+            projectKey: defaultValues?.projectKey ?? '',
             ...defaultValues,
         },
     });
+
+    const projectKeyValue = watch('projectKey');
+    useEffect(() => {
+        if (!projectKeyValue && projectOptions.length) {
+            setValue('projectKey', projectOptions[0].value, {shouldValidate: true});
+        }
+    }, [projectKeyValue, projectOptions, setValue]);
 
     return (
         <Stack
@@ -72,6 +96,30 @@ export const MeetingForm = ({
                         error={Boolean(fieldState.error)}
                         helperText={fieldState.error?.message}
                     />
+                )}
+            />
+            <Controller
+                name="projectKey"
+                control={control}
+                render={({field, fieldState}) => (
+                    <TextField
+                        {...field}
+                        select
+                        label="Jira project"
+                        required
+                        disabled={projectsLoading || projectOptions.length === 0}
+                        error={Boolean(fieldState.error) || projectsError}
+                        helperText={
+                            fieldState.error?.message ||
+                            (projectsError ? 'Failed to load Jira projects' : undefined)
+                        }
+                    >
+                        {projectOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </TextField>
                 )}
             />
             <Controller

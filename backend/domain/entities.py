@@ -10,4 +10,5 @@ class MeetingImportJob:
     started_at: str
     blob_url: str
     owner_id: str
+    project_key: str | None = None
     original_filename: str | None = None

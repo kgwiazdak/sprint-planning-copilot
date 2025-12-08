@@ -5,4 +5,5 @@ export const queryKeys = {
     reviewTasks: () => ['reviewTasks'] as const,
     task: (id: string) => ['task', id] as const,
     users: () => ['users'] as const,
+    jiraProjects: () => ['jiraProjects'] as const,
 };

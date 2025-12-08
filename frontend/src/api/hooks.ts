@@ -1,7 +1,7 @@
 import {type QueryKey, useMutation, useQuery, useQueryClient,} from '@tanstack/react-query';
 import {apiClient} from './client';
 import {queryKeys} from './queryKeys';
-import type {Meeting, Task, User} from '../types';
+import type {JiraProject, Meeting, Task, User} from '../types';
 import type {MeetingUpdateValues} from '../schemas/meeting';
 import type {TaskUpdateValues} from '../schemas/task';
 
@@ -29,6 +29,11 @@ const fetchReviewTasks = async () => {
 
 const fetchUsers = async () => {
     const {data} = await apiClient.get<User[]>('/users');
+    return data;
+};
+
+const fetchJiraProjects = async () => {
+    const {data} = await apiClient.get<JiraProject[]>('/jira/projects');
     return data;
 };
 
@@ -71,6 +76,12 @@ export const useUsers = () =>
         queryFn: fetchUsers,
     });
 
+export const useJiraProjects = () =>
+    useQuery({
+        queryKey: queryKeys.jiraProjects(),
+        queryFn: fetchJiraProjects,
+    });
+
 type UploadVoiceInput = {
     file: File;
     displayName: string;
@@ -101,6 +112,7 @@ export const useUploadVoiceSample = () => {
 type CreateMeetingInput = {
     title: string;
     startedAt: string;
+    projectKey: string;
     file: File;
 };
 
@@ -138,7 +150,7 @@ const uploadFileToBlob = async (uploadUrl: string, file: File) => {
 export const useCreateMeeting = () => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: async ({title, startedAt, file}: CreateMeetingInput) => {
+        mutationFn: async ({title, startedAt, projectKey, file}: CreateMeetingInput) => {
             if (!file) {
                 throw new Error('No file provided');
             }
@@ -147,6 +159,7 @@ export const useCreateMeeting = () => {
             await apiClient.post('/meetings/import', {
                 title,
                 startedAt,
+                projectKey,
                 blobUrl: ticket.blobUrl,
                 originalFilename: file.name,
                 meetingId: ticket.meetingId,
@@ -157,10 +170,11 @@ export const useCreateMeeting = () => {
                 title,
                 startedAt,
                 status: 'queued' as const,
+                projectKey,
                 draftTaskCount: 0,
             };
         },
-        onMutate: async ({title, startedAt}) => {
+        onMutate: async ({title, startedAt, projectKey}) => {
             // Cancel any outgoing refetches to prevent overwriting optimistic update
             await queryClient.cancelQueries({queryKey: queryKeys.meetings()});
             const previous = queryClient.getQueryData<Meeting[]>(queryKeys.meetings());
@@ -171,6 +185,7 @@ export const useCreateMeeting = () => {
                 startedAt,
                 status: 'queued',
                 draftTaskCount: 0,
+                projectKey,
             };
             queryClient.setQueryData<Meeting[]>(queryKeys.meetings(), (current = []) => [
                 optimisticMeeting,
@@ -341,6 +356,7 @@ export const useUpdateTask = () => {
 };
 
 type BulkInput = { ids: string[] };
+type BulkApproveInput = BulkInput & { projectKey: string };
 
 const mutateTaskStatus = (
     tasks: Task[] | undefined,
@@ -351,12 +367,16 @@ const mutateTaskStatus = (
         ids.includes(task.id) ? {...task, status} : task,
     ) ?? tasks;
 
-const useBulkTaskMutation = (status: Task['status'], url: string) => {
+const useBulkTaskMutation = <T extends BulkInput>(
+    status: Task['status'],
+    url: string,
+    buildPayload?: (input: T) => Record<string, unknown>,
+) => {
     const queryClient = useQueryClient();
     return useMutation({
-        mutationFn: ({ids}: BulkInput) =>
-            apiClient.post(url, {ids}).then((res) => res.data),
-        onMutate: async ({ids}) => {
+        mutationFn: (input: T) =>
+            apiClient.post(url, buildPayload ? buildPayload(input) : {ids: input.ids}).then((res) => res.data),
+        onMutate: async ({ids}: T) => {
             await Promise.all([
                 queryClient.cancelQueries({queryKey: queryKeys.reviewTasks()}),
                 queryClient.cancelQueries({queryKey: ['tasks']}),
@@ -405,7 +425,10 @@ const useBulkTaskMutation = (status: Task['status'], url: string) => {
 };
 
 export const useApproveTasks = () =>
-    useBulkTaskMutation('approved', '/tasks/bulk-approve');
+    useBulkTaskMutation<BulkApproveInput>('approved', '/tasks/bulk-approve', (input) => ({
+        ids: input.ids,
+        projectKey: input.projectKey,
+    }));
 
 export const useRejectTasks = () =>
     useBulkTaskMutation('rejected', '/tasks/bulk-reject');

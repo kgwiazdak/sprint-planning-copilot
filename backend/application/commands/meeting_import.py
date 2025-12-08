@@ -14,6 +14,7 @@ class MeetingImportPayload:
     started_at: str
     blob_url: str
     owner_id: str
+    project_key: str | None = None
     meeting_id: str | None = None
     original_filename: str | None = None
 
@@ -37,6 +38,7 @@ class SubmitMeetingImportCommand:
             title=payload.title,
             started_at=payload.started_at,
             blob_url=payload.blob_url,
+            project_key=payload.project_key,
             owner_id=payload.owner_id,
         )
         job = MeetingImportJob(
@@ -44,6 +46,7 @@ class SubmitMeetingImportCommand:
             title=payload.title,
             started_at=payload.started_at,
             blob_url=payload.blob_url,
+            project_key=payload.project_key,
             original_filename=payload.original_filename,
             owner_id=payload.owner_id,
         )

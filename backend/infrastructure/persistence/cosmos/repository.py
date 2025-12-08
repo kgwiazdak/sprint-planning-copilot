@@ -118,6 +118,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             started_at: str,
             source_url: str | None,
             source_text: str | None,
+            project_key: str | None,
             owner_id: str,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
@@ -132,6 +133,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "transcript": source_text,
             "sourceUrl": source_url,
             "sourceText": source_text,
+            "projectKey": project_key,
             "ownerId": owner_id,
         }
         self._meetings.create_item(document)
@@ -342,6 +344,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             title: str,
             started_at: str,
             blob_url: str,
+            project_key: str | None,
             owner_id: str,
     ) -> None:
         self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
@@ -359,6 +362,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "createdAt": now,
             "status": MeetingStatus.QUEUED.value,
             "sourceUrl": blob_url,
+            "projectKey": project_key,
             "ownerId": owner_id,
         }
         self._meetings.upsert_item(document)
@@ -386,6 +390,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             title: str | None = None,
             started_at: str | None = None,
             blob_url: str | None = None,
+            project_key: str | None = None,
             owner_id: str | None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
@@ -413,6 +418,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "transcript": transcript,
             "sourceUrl": blob_url,
             "sourceText": transcript,
+            "projectKey": project_key or (existing_doc or {}).get("projectKey"),
             "ownerId": final_owner,
         }
         self._meetings.upsert_item(meeting_doc)
@@ -516,6 +522,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "status": item.get("status", MeetingStatus.QUEUED.value),
             "draftTaskCount": draft_count,
             "transcript": item.get("transcript"),
+            "projectKey": item.get("projectKey"),
         }
 
     def _serialize_task(self, item: dict[str, Any], users: dict[str, dict[str, Any]]) -> dict[str, Any]:

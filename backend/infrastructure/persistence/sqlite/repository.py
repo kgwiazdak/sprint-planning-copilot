@@ -44,6 +44,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                     m.started_at,
                     m.status,
                     m.created_at,
+                    m.project_key,
                     COALESCE(dc.count, 0) AS draft_count
                 FROM meetings m
                 LEFT JOIN (
@@ -74,6 +75,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                     m.started_at,
                     m.status,
                     m.created_at,
+                    m.project_key,
                     COALESCE(dc.count, 0) AS draft_count
                 FROM meetings m
                 LEFT JOIN (
@@ -99,6 +101,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             started_at: str,
             source_url: str | None,
             source_text: str | None,
+            project_key: str | None,
             owner_id: str,
     ) -> dict[str, Any]:
         meeting_id = str(uuid.uuid4())
@@ -108,8 +111,8 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         try:
             conn.execute(
                 """
-                INSERT INTO meetings(id, title, transcript, created_at, started_at, status, source_url, source_text, owner_id)
-                VALUES(?,?,?,?,?,?,?,?,?)
+                INSERT INTO meetings(id, title, transcript, created_at, started_at, status, source_url, source_text, project_key, owner_id)
+                VALUES(?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     meeting_id,
@@ -120,6 +123,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                     "pending",
                     source_url,
                     source_text,
+                    project_key,
                     owner_id,
                 ),
             )
@@ -424,6 +428,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             title: str,
             started_at: str,
             blob_url: str,
+            project_key: str | None,
             owner_id: str,
     ) -> None:
         self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
@@ -437,13 +442,14 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                 raise ValueError("Meeting already exists for a different user")
             conn.execute(
                 """
-                INSERT INTO meetings(id, title, created_at, started_at, status, source_url, owner_id)
-                VALUES(?,?,?,?,?,?,?)
+                INSERT INTO meetings(id, title, created_at, started_at, status, source_url, project_key, owner_id)
+                VALUES(?,?,?,?,?,?,?,?)
                 ON CONFLICT(id) DO UPDATE SET
                     title=excluded.title,
                     started_at=excluded.started_at,
                     status='queued',
                     source_url=excluded.source_url,
+                    project_key=COALESCE(excluded.project_key, meetings.project_key),
                     owner_id=excluded.owner_id
                 """,
                 (
@@ -453,6 +459,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                     started_at,
                     MeetingStatus.QUEUED.value,
                     blob_url,
+                    project_key,
                     owner_id,
                 ),
             )
@@ -489,6 +496,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             title: Optional[str] = None,
             started_at: Optional[str] = None,
             blob_url: Optional[str] = None,
+            project_key: Optional[str] = None,
             owner_id: str | None,
     ) -> tuple[str, str]:
         meeting_id = meeting_id or str(uuid.uuid4())
@@ -514,7 +522,8 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                     """
                     UPDATE meetings
                     SET title = ?, transcript = ?, started_at = ?, status = 'completed',
-                        source_text = ?, source_url = COALESCE(source_url, ?), owner_id = COALESCE(owner_id, ?)
+                        source_text = ?, source_url = COALESCE(source_url, ?), project_key = COALESCE(project_key, ?),
+                        owner_id = COALESCE(owner_id, ?)
                     WHERE id = ? AND (owner_id = ? OR owner_id IS NULL)
                     """,
                     (
@@ -523,6 +532,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                         meeting_started_at,
                         transcript,
                         blob_url,
+                        project_key,
                         final_owner,
                         meeting_id,
                         final_owner,
@@ -531,8 +541,8 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             else:
                 conn.execute(
                     """
-                    INSERT INTO meetings(id, title, transcript, created_at, started_at, status, source_text, source_url, owner_id)
-                    VALUES(?,?,?,?,?,?,?,?,?)
+                    INSERT INTO meetings(id, title, transcript, created_at, started_at, status, source_text, source_url, project_key, owner_id)
+                    VALUES(?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         meeting_id,
@@ -543,6 +553,7 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                         MeetingStatus.COMPLETED.value,
                         transcript,
                         blob_url,
+                        project_key,
                         final_owner,
                     ),
                 )

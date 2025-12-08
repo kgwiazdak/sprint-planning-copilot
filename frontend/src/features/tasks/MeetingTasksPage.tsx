@@ -1,4 +1,4 @@
-import {useMemo, useState} from 'react';
+import {useMemo, useState, type ReactNode} from 'react';
 import {Alert, Box, Button, Chip, Paper, Stack, Typography} from '@mui/material';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useSnackbar} from 'notistack';
@@ -11,6 +11,36 @@ import {PageHeader} from '../../components/PageHeader';
 import {formatDateTime} from '../../utils/format';
 
 type StatusFilter = TaskStatus | 'all';
+
+type MetadataItemProps = {
+    label: string;
+    value: ReactNode;
+};
+
+const MetadataItem = ({label, value}: MetadataItemProps) => (
+    <Stack
+        direction="row"
+        spacing={0.75}
+        alignItems="center"
+        minWidth={{xs: '100%', md: 200}}
+        flexShrink={0}
+    >
+        <Typography
+            variant="overline"
+            color="text.secondary"
+            sx={{lineHeight: 1.4, whiteSpace: 'nowrap'}}
+        >
+            {label}
+        </Typography>
+        {typeof value === 'string' || typeof value === 'number' ? (
+            <Typography variant="body2" fontWeight={600}>
+                {value}
+            </Typography>
+        ) : (
+            value
+        )}
+    </Stack>
+);
 
 export const MeetingTasksPage = () => {
     const {id = ''} = useParams();
@@ -48,22 +78,37 @@ export const MeetingTasksPage = () => {
         return <Alert severity="warning">Meeting not found.</Alert>;
     }
 
-    const disableBulk =
-        selectedIds.length === 0 ||
+    const baseActionDisabled =
         approveTasks.isPending ||
         rejectTasks.isPending ||
-        isLoading;
+        isLoading ||
+        isFetching;
+    const selectionDisabled = baseActionDisabled || selectedIds.length === 0;
+    const targetProjectKey = meeting?.projectKey ?? '';
+    const approveDisabled =
+        selectionDisabled || !targetProjectKey;
 
-    const handleBulkAction = async (
-        ids: string[],
-        mutation:
-            | ReturnType<typeof useApproveTasks>
-            | ReturnType<typeof useRejectTasks>,
-        message: string,
-    ) => {
+    const handleApprove = async (ids: string[], message: string) => {
+        if (!ids.length) return;
+        if (!targetProjectKey) {
+            enqueueSnackbar('This meeting has no target Jira project; set one before pushing tasks.', {
+                variant: 'warning',
+            });
+            return;
+        }
+        try {
+            await approveTasks.mutateAsync({ids, projectKey: targetProjectKey});
+            enqueueSnackbar(message, {variant: 'success'});
+            setSelectedIds([]);
+        } catch (error) {
+            enqueueSnackbar((error as Error).message, {variant: 'error'});
+        }
+    };
+
+    const handleReject = async (ids: string[], message: string) => {
         if (!ids.length) return;
         try {
-            await mutation.mutateAsync({ids});
+            await rejectTasks.mutateAsync({ids});
             enqueueSnackbar(message, {variant: 'success'});
             setSelectedIds([]);
         } catch (error) {
@@ -99,12 +144,6 @@ export const MeetingTasksPage = () => {
         }
     };
 
-    const MAX_VISIBLE_ROWS = 5;
-    const DATA_GRID_ROW_HEIGHT = 78;
-    const DATA_GRID_HEADER_HEIGHT = 64;
-    const TABLE_MAX_HEIGHT =
-        DATA_GRID_HEADER_HEIGHT + MAX_VISIBLE_ROWS * DATA_GRID_ROW_HEIGHT;
-
     return (
         <Box
             sx={{
@@ -115,81 +154,65 @@ export const MeetingTasksPage = () => {
                 overflow: 'hidden',
             }}
         >
-            <PageHeader
-                eyebrow="Meeting review"
-                title={meeting ? meeting.title : 'Meeting tasks'}
-                subtitle={
-                    meeting
-                        ? `Started ${formatDateTime(meeting.startedAt)} · Status: ${meeting.status}`
-                        : 'Review extracted tasks for the selected meeting.'
-                }
-                actions={
-                    <Button variant="text" onClick={() => navigate('/meetings')}>
-                        Back to meetings
-                    </Button>
-                }
-            />
-            {meeting && (
-                <Paper
-                    sx={{
-                        p: 2,
-                        mb: 2,
-                        borderRadius: 2.5,
-                    }}
-                >
-                    <Stack
-                        direction={{xs: 'column', sm: 'row'}}
-                        spacing={2}
-                        alignItems={{xs: 'flex-start', sm: 'center'}}
-                        justifyContent="space-between"
-                    >
-                        <Stack spacing={0.25}>
-                            <Typography variant="overline" color="text.secondary">
-                                Meeting metadata
-                            </Typography>
-                            <Typography variant="body2">{meeting.id}</Typography>
-                            <Typography variant="body2" color="text.secondary">
-                                {formatDateTime(meeting.startedAt)}
-                            </Typography>
-                        </Stack>
-                        <Stack direction="row" spacing={2}>
-                            <Stack spacing={0.25}>
-                                <Typography variant="overline" color="text.secondary">
-                                    Draft tasks
-                                </Typography>
-                                <Typography variant="h6" fontWeight={700}>
-                                    {meeting.draftTaskCount ?? 0}
-                                </Typography>
-                            </Stack>
-                            <Stack spacing={0.25}>
-                                <Typography variant="overline" color="text.secondary">
-                                    Status
-                                </Typography>
-                                <Chip label={meeting.status} color={getStatusColor(meeting.status)}/>
-                            </Stack>
-                        </Stack>
-                    </Stack>
-                </Paper>
-            )}
-            <DataGridToolbar
-                title="Selection"
-                selectionCount={selectedIds.length}
-                onApproveSelected={() =>
-                    handleBulkAction(selectedIds, approveTasks, 'Tasks approved')
-                }
-                onRejectSelected={() =>
-                    handleBulkAction(selectedIds, rejectTasks, 'Tasks rejected')
-                }
-                disableActions={disableBulk}
-                statusFilter={statusFilter}
-                onStatusFilterChange={setStatusFilter}
-                search={search}
-                onSearchChange={setSearch}
-            />
             <Paper
                 sx={{
-                    p: {xs: 1, md: 2},
-                    borderRadius: 3,
+                    p: {xs: 1.25, md: 1.5},
+                    mb: 1.25,
+                    borderRadius: 2.25,
+                }}
+            >
+                <Stack spacing={meeting ? 1.25 : 1}>
+                    <PageHeader
+                        eyebrow="Meeting review"
+                        title={meeting ? meeting.title : 'Meeting tasks'}
+                        subtitle={
+                            meeting
+                                ? undefined
+                                : 'Review extracted tasks for the selected meeting.'
+                        }
+                        actions={
+                            <Button variant="text" onClick={() => navigate('/meetings')}>
+                                Back to meetings
+                            </Button>
+                        }
+                    />
+                    {meeting && (
+                        <Stack
+                            direction={{xs: 'column', md: 'row'}}
+                            spacing={{xs: 1.5, md: 3}}
+                            useFlexGap
+                            flexWrap="wrap"
+                            alignItems="center"
+                        >
+                            <MetadataItem label="Meeting ID" value={meeting.id}/>
+                            <MetadataItem
+                                label="Started at"
+                                value={formatDateTime(meeting.startedAt)}
+                            />
+                            <MetadataItem
+                                label="Status"
+                                value={<Chip label={meeting.status} color={getStatusColor(meeting.status)} size="small"/>}
+                            />
+                            <MetadataItem
+                                label="Draft tasks"
+                                value={
+                                    <Typography variant="h6" fontWeight={700}>
+                                        {meeting.draftTaskCount ?? 0}
+                                    </Typography>
+                                }
+                            />
+                            <MetadataItem
+                                label="Target project"
+                                value={meeting.projectKey || 'Not set'}
+                            />
+                        </Stack>
+                    )}
+                </Stack>
+            </Paper>
+            <Paper
+                sx={{
+                    p: {xs: 1, md: 1.5},
+                    borderRadius: 2.5,
                     flexGrow: 1,
                     minHeight: 0,
                     display: 'flex',
@@ -197,11 +220,28 @@ export const MeetingTasksPage = () => {
                     overflow: 'hidden',
                 }}
             >
+                <DataGridToolbar
+                    variant="inline"
+                    title="Selection"
+                    selectionCount={selectedIds.length}
+                    onApproveSelected={() =>
+                        handleApprove(selectedIds, 'Tasks approved')
+                    }
+                    onRejectSelected={() =>
+                        handleReject(selectedIds, 'Tasks rejected')
+                    }
+                    disableActions={selectionDisabled}
+                    disableApprove={approveDisabled}
+                    disableReject={selectionDisabled}
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    search={search}
+                    onSearchChange={setSearch}
+                />
                 <Box
                     sx={{
                         flexGrow: 1,
                         minHeight: 0,
-                        maxHeight: TABLE_MAX_HEIGHT,
                     }}
                 >
                     <TasksTable
@@ -211,7 +251,6 @@ export const MeetingTasksPage = () => {
                         selectedIds={selectedIds}
                         onSelectionChange={setSelectedIds}
                         onRowDoubleClick={(task) => setDrawerTaskId(task.id)}
-                        hideFooter
                     />
                 </Box>
             </Paper>

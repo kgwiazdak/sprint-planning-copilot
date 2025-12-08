@@ -1,4 +1,4 @@
-import {AddCircleOutline, CalendarMonth, FactCheck, GraphicEq, ListAlt,} from '@mui/icons-material';
+import {AddCircleOutline, CalendarMonth, GraphicEq, ListAlt} from '@mui/icons-material';
 import {
     Box,
     Chip,
@@ -14,7 +14,6 @@ import {
 import {Link as RouterLink, matchPath, Navigate, Route, Routes, useLocation,} from 'react-router-dom';
 import {ThemeToggleButton} from './theme';
 import {drawerWidth} from '../utils/constants';
-import {ReviewApprovePage} from '../features/tasks/ReviewApprovePage';
 import {MeetingsList} from '../features/meetings/MeetingsList';
 import {NewMeetingForm} from '../features/meetings/NewMeetingForm';
 import {MeetingTasksPage} from '../features/tasks/MeetingTasksPage';
@@ -22,7 +21,6 @@ import {EditTaskPage} from '../features/tasks/EditTaskPage';
 import {VoiceProfilesPage} from '../features/users/VoiceProfilesPage';
 
 const baseNavItems = [
-    {label: 'Review & Approve', path: '/review', icon: <FactCheck/>},
     {label: 'Meetings', path: '/meetings', icon: <CalendarMonth/>},
     {label: 'New Meeting', path: '/meetings/new', icon: <AddCircleOutline/>},
     {label: 'Voice Profiles', path: '/voices', icon: <GraphicEq/>},
@@ -33,15 +31,14 @@ const NavList = () => {
     const tasksMatch = matchPath('/meetings/:id/tasks', location.pathname);
     const navItems = tasksMatch
         ? [
-            baseNavItems[0],
-            baseNavItems[1],
+            {label: 'Meetings', path: '/meetings', icon: <CalendarMonth/>},
             {
                 label: 'Meeting Tasks',
                 path: location.pathname,
                 icon: <ListAlt/>,
             },
-            baseNavItems[2],
-            baseNavItems[3],
+            {label: 'New Meeting', path: '/meetings/new', icon: <AddCircleOutline/>},
+            {label: 'Voice Profiles', path: '/voices', icon: <GraphicEq/>},
         ]
         : baseNavItems;
 
@@ -188,14 +185,13 @@ export const App = () => (
             >
                 <Box sx={{flexGrow: 1, minHeight: 0, overflow: 'hidden'}}>
                     <Routes>
-                        <Route path="/" element={<Navigate to="/review" replace/>}/>
-                        <Route path="/review" element={<ReviewApprovePage/>}/>
+                        <Route path="/" element={<Navigate to="/meetings" replace/>}/>
                         <Route path="/meetings" element={<MeetingsList/>}/>
                         <Route path="/meetings/new" element={<NewMeetingForm/>}/>
                         <Route path="/meetings/:id/tasks" element={<MeetingTasksPage/>}/>
                         <Route path="/tasks/:id/edit" element={<EditTaskPage/>}/>
                         <Route path="/voices" element={<VoiceProfilesPage/>}/>
-                        <Route path="*" element={<Navigate to="/review" replace/>}/>
+                        <Route path="*" element={<Navigate to="/meetings" replace/>}/>
                     </Routes>
                 </Box>
             </Box>

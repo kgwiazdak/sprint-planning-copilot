@@ -13,6 +13,7 @@ def serialize_meeting_row(row: sqlite3.Row) -> dict[str, Any]:
         "startedAt": started,
         "status": row["status"] or "pending",
         "draftTaskCount": row["draft_count"],
+        "projectKey": row["project_key"] if "project_key" in row.keys() else None,
     }
 
 
