@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 import uuid
 from typing import Any, Iterable, Optional
+
+from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy.orm import Session
 
 from backend.audit import log_meeting_access
 from backend.domain.ports import MeetingsRepositoryPort
@@ -11,11 +13,18 @@ from backend.domain.status import MeetingStatus
 from backend.schemas import ExtractionResult
 from . import mappers
 from .constants import ISSUE_TYPES, PRIORITIES, TASK_STATUSES
-from .database import SqliteDatabase, utc_now_iso
+from .database import (
+    ExtractionRun,
+    Meeting,
+    SqliteDatabase,
+    Task,
+    User,
+    utc_now_iso,
+)
 
 
 class SqliteMeetingsRepository(MeetingsRepositoryPort):
-    """SQLite-backed repository providing CRUD helpers for meetings and tasks."""
+    """SQLite-backed repository implemented with SQLAlchemy."""
 
     def __init__(self, db_url: str | None = None) -> None:
         self._db = SqliteDatabase(db_url)
@@ -34,65 +43,41 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
     # --- Meeting queries -------------------------------------------------
     def list_meetings(self, *, owner_id: str) -> list[dict[str, Any]]:
         self._audit("list")
-        conn = self._db.connect()
-        try:
-            rows = conn.execute(
-                """
-                SELECT
-                    m.id,
-                    m.title,
-                    m.started_at,
-                    m.status,
-                    m.created_at,
-                    m.project_key,
-                    COALESCE(dc.count, 0) AS draft_count
-                FROM meetings m
-                LEFT JOIN (
-                    SELECT meeting_id, COUNT(*) AS count
-                    FROM tasks
-                    WHERE status = 'draft'
-                    GROUP BY meeting_id
-                ) AS dc ON dc.meeting_id = m.id
-                WHERE m.owner_id = ?
-                ORDER BY m.started_at DESC
-                """
-                ,
-                (owner_id,),
-            ).fetchall()
-            return [mappers.serialize_meeting_row(row) for row in rows]
-        finally:
-            conn.close()
+        with self._db.session() as session:
+            draft_counts = (
+                session.query(Task.meeting_id, func.count(Task.id).label("draft_count"))
+                .filter(Task.status == "draft")
+                .group_by(Task.meeting_id)
+                .subquery()
+            )
+            results = (
+                session.query(Meeting, func.coalesce(draft_counts.c.draft_count, 0))
+                .outerjoin(draft_counts, Meeting.id == draft_counts.c.meeting_id)
+                .filter(Meeting.owner_id == owner_id)
+                .order_by(Meeting.started_at.desc())
+                .all()
+            )
+            return [mappers.serialize_meeting_row(meeting, draft_count) for meeting, draft_count in results]
 
     def get_meeting(self, meeting_id: str, *, owner_id: str) -> dict[str, Any] | None:
         self._audit("get", meeting_id=meeting_id)
-        conn = self._db.connect()
-        try:
-            row = conn.execute(
-                """
-                SELECT
-                    m.id,
-                    m.title,
-                    m.started_at,
-                    m.status,
-                    m.created_at,
-                    m.project_key,
-                    COALESCE(dc.count, 0) AS draft_count
-                FROM meetings m
-                LEFT JOIN (
-                    SELECT meeting_id, COUNT(*) AS count
-                    FROM tasks
-                    WHERE status = 'draft'
-                    GROUP BY meeting_id
-                ) AS dc ON dc.meeting_id = m.id
-                WHERE m.id = ? AND m.owner_id = ?
-                """,
-                (meeting_id, owner_id),
-            ).fetchone()
-            if not row:
+        with self._db.session() as session:
+            draft_counts = (
+                session.query(Task.meeting_id, func.count(Task.id).label("draft_count"))
+                .filter(Task.status == "draft")
+                .group_by(Task.meeting_id)
+                .subquery()
+            )
+            result = (
+                session.query(Meeting, func.coalesce(draft_counts.c.draft_count, 0))
+                .outerjoin(draft_counts, Meeting.id == draft_counts.c.meeting_id)
+                .filter(Meeting.id == meeting_id, Meeting.owner_id == owner_id)
+                .first()
+            )
+            if not result:
                 return None
-            return mappers.serialize_meeting_row(row)
-        finally:
-            conn.close()
+            meeting, draft_count = result
+            return mappers.serialize_meeting_row(meeting, draft_count)
 
     def create_meeting(
             self,
@@ -107,123 +92,103 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         meeting_id = str(uuid.uuid4())
         self._audit("create", meeting_id=meeting_id)
         now = utc_now_iso()
-        conn = self._db.connect()
-        try:
-            conn.execute(
-                """
-                INSERT INTO meetings(id, title, transcript, created_at, started_at, status, source_url, source_text, project_key, owner_id)
-                VALUES(?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    meeting_id,
-                    title,
-                    source_text,
-                    now,
-                    started_at,
-                    "pending",
-                    source_url,
-                    source_text,
-                    project_key,
-                    owner_id,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-        return self.get_meeting(meeting_id, owner_id=owner_id)
+        meeting = Meeting(
+            id=meeting_id,
+            title=title,
+            transcript=source_text,
+            created_at=now,
+            started_at=started_at,
+            status="pending",
+            source_url=source_url,
+            source_text=source_text,
+            project_key=project_key,
+            owner_id=owner_id,
+        )
+        with self._db.session() as session:
+            session.add(meeting)
+            session.commit()
+        created = self.get_meeting(meeting_id, owner_id=owner_id)
+        if created is None:
+            raise ValueError("Failed to create meeting")
+        return created
 
     def update_meeting(
             self, meeting_id: str, *, title: str | None, started_at: str | None, owner_id: str
     ) -> dict[str, Any]:
         self._audit("update", meeting_id=meeting_id)
-        fields = []
-        params: list[Any] = []
-        if title is not None:
-            fields.append("title = ?")
-            params.append(title)
-        if started_at is not None:
-            fields.append("started_at = ?")
-            params.append(started_at)
-        if not fields:
-            meeting = self.get_meeting(meeting_id, owner_id=owner_id)
-            if meeting is None:
-                raise ValueError("Meeting not found")
-            return meeting
-
-        params.append(meeting_id)
-        params.append(owner_id)
-        conn = self._db.connect()
-        try:
-            cur = conn.execute(
-                f"UPDATE meetings SET {', '.join(fields)} WHERE id = ? AND owner_id = ?",
-                params,
+        with self._db.session() as session:
+            meeting = (
+                session.query(Meeting)
+                .filter(Meeting.id == meeting_id, Meeting.owner_id == owner_id)
+                .first()
             )
-            if cur.rowcount == 0:
+            if not meeting:
                 raise ValueError("Meeting not found")
-            conn.commit()
-        finally:
-            conn.close()
-        meeting = self.get_meeting(meeting_id, owner_id=owner_id)
-        if meeting is None:
+            if title is not None:
+                meeting.title = title
+            if started_at is not None:
+                meeting.started_at = started_at
+            session.commit()
+        updated = self.get_meeting(meeting_id, owner_id=owner_id)
+        if updated is None:
             raise ValueError("Meeting not found")
-        return meeting
+        return updated
 
     def delete_meeting(self, meeting_id: str, *, owner_id: str) -> bool:
         self._audit("delete", meeting_id=meeting_id)
-        conn = self._db.connect()
-        try:
-            cur = conn.execute("DELETE FROM meetings WHERE id = ? AND owner_id = ?", (meeting_id, owner_id))
-            conn.commit()
-            return cur.rowcount > 0
-        finally:
-            conn.close()
+        with self._db.session() as session:
+            meeting = (
+                session.query(Meeting)
+                .filter(Meeting.id == meeting_id, Meeting.owner_id == owner_id)
+                .first()
+            )
+            if not meeting:
+                return False
+            session.delete(meeting)
+            session.commit()
+            return True
 
     # --- Task queries ----------------------------------------------------
     def list_tasks(
             self, *, meeting_id: str | None = None, status: str | None = None, owner_id: str
     ) -> list[dict[str, Any]]:
         self._audit("list_tasks", meeting_id=meeting_id, resource="task", details={"status": status})
-        conn = self._db.connect()
-        try:
-            query = """
-                SELECT t.*, u.display_name AS assignee_display_name, u.jira_account_id
-                FROM tasks t
-                JOIN meetings m ON m.id = t.meeting_id
-                LEFT JOIN users u ON u.id = t.assignee_id
-                    AND (u.owner_id = ? OR u.owner_id IS NULL OR u.owner_id = 'system')
-                WHERE m.owner_id = ?
-            """
-            params: list[Any] = [owner_id, owner_id]
+        with self._db.session() as session:
+            query = (
+                session.query(Task, User)
+                .join(Meeting, Task.meeting_id == Meeting.id)
+                .outerjoin(
+                    User,
+                    (User.id == Task.assignee_id)
+                    & or_(User.owner_id == owner_id, User.owner_id.is_(None), User.owner_id == "system"),
+                )
+                .filter(Meeting.owner_id == owner_id)
+            )
             if meeting_id:
-                query += " AND t.meeting_id = ?"
-                params.append(meeting_id)
+                query = query.filter(Task.meeting_id == meeting_id)
             if status:
-                query += " AND t.status = ?"
-                params.append(status)
-            query += " ORDER BY t.created_at DESC"
-            rows = conn.execute(query, params).fetchall()
-            return [mappers.serialize_task_row(row) for row in rows]
-        finally:
-            conn.close()
+                query = query.filter(Task.status == status)
+            rows = query.order_by(Task.created_at.desc()).all()
+            return [mappers.serialize_task_row(task, assignee) for task, assignee in rows]
 
     def get_task(self, task_id: str, *, owner_id: str) -> dict[str, Any] | None:
         self._audit("get_task", resource="task", details={"task_id": task_id})
-        conn = self._db.connect()
-        try:
-            row = conn.execute(
-                """
-                SELECT t.*, u.display_name AS assignee_display_name, u.jira_account_id
-                FROM tasks t
-                JOIN meetings m ON m.id = t.meeting_id
-                LEFT JOIN users u ON u.id = t.assignee_id
-                    AND (u.owner_id = ? OR u.owner_id IS NULL OR u.owner_id = 'system')
-                WHERE t.id = ? AND m.owner_id = ?
-                """,
-                (owner_id, task_id, owner_id),
-            ).fetchone()
-            return mappers.serialize_task_row(row) if row else None
-        finally:
-            conn.close()
+        with self._db.session() as session:
+            row = (
+                session.query(Task, User)
+                .join(Meeting, Task.meeting_id == Meeting.id)
+                .outerjoin(
+                    User,
+                    (User.id == Task.assignee_id)
+                    & or_(User.owner_id == owner_id, User.owner_id.is_(None), User.owner_id == "system"),
+                )
+                .filter(Task.id == task_id, Meeting.owner_id == owner_id)
+                .first()
+            )
+            if not row:
+                return None
+            task, assignee = row
+            return mappers.serialize_task_row(task, assignee)
 
     def update_task(self, task_id: str, payload: dict[str, Any], *, owner_id: str) -> dict[str, Any]:
         self._audit("update_task", resource="task", details={"task_id": task_id})
@@ -237,101 +202,78 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             "labels": "labels",
             "status": "status",
         }
-        fields = []
-        params: list[Any] = []
-        for key, column in allowed.items():
-            if key not in payload or payload[key] is None:
-                continue
-            value = payload[key]
-            if key == "labels":
-                value = json.dumps(value)
-            fields.append(f"{column} = ?")
-            params.append(value)
-        if not fields:
-            task = self.get_task(task_id, owner_id=owner_id)
-            if task is None:
-                raise ValueError("Task not found")
-            return task
-        fields.append("owner_id = COALESCE(owner_id, ?)")
-        params.append(owner_id)
-        fields.append("updated_at = ?")
-        params.append(utc_now_iso())
-        params.append(task_id)
-        conn = self._db.connect()
-        try:
-            cur = conn.execute(
-                f"""
-                UPDATE tasks
-                SET {', '.join(fields)}
-                WHERE id = ?
-                  AND meeting_id IN (SELECT id FROM meetings WHERE owner_id = ?)
-                """,
-                params,
+        with self._db.session() as session:
+            task = (
+                session.query(Task)
+                .join(Meeting, Task.meeting_id == Meeting.id)
+                .filter(Task.id == task_id, Meeting.owner_id == owner_id)
+                .first()
             )
-            if cur.rowcount == 0:
+            if not task:
                 raise ValueError("Task not found")
-            conn.commit()
-            row = conn.execute(
-                "SELECT meeting_id FROM tasks WHERE id = ?",
-                (task_id,),
-            ).fetchone()
-        finally:
-            conn.close()
-        meeting_id = row["meeting_id"] if row else None
-        task = self.get_task(task_id, owner_id=owner_id)
-        if task is None:
+            updated = False
+            for key, attr in allowed.items():
+                if key not in payload or payload[key] is None:
+                    continue
+                value = payload[key]
+                if key == "labels":
+                    value = json.dumps(value)
+                setattr(task, attr, value)
+                updated = True
+            if not updated:
+                session.expunge(task)
+                session.close()
+                existing = self.get_task(task_id, owner_id=owner_id)
+                if existing is None:
+                    raise ValueError("Task not found")
+                return existing
+            task.owner_id = task.owner_id or owner_id
+            task.updated_at = utc_now_iso()
+            session.commit()
+        updated_task = self.get_task(task_id, owner_id=owner_id)
+        if updated_task is None:
             raise ValueError("Task not found")
-        return task
+        return updated_task
 
     def bulk_update_status(self, ids: Iterable[str], status: str, *, owner_id: str) -> int:
-        ids = list(ids)
-        self._audit("bulk_update_status", resource="task", details={"ids": ids, "status": status})
-        if not ids:
+        task_ids = [task_id for task_id in ids if task_id]
+        self._audit("bulk_update_status", resource="task", details={"ids": task_ids, "status": status})
+        if not task_ids:
             return 0
-        conn = self._db.connect()
-        try:
-            placeholders = ",".join("?" for _ in ids)
-            params = [status, utc_now_iso(), owner_id, *ids, owner_id]
-            cur = conn.execute(
-                f"""
-                UPDATE tasks
-                SET status = ?, updated_at = ?, owner_id = COALESCE(owner_id, ?)
-                WHERE id IN ({placeholders})
-                  AND meeting_id IN (SELECT id FROM meetings WHERE owner_id = ?)
-                """,
-                params,
+        now = utc_now_iso()
+        with self._db.session() as session:
+            stmt = (
+                update(Task)
+                .where(Task.id.in_(task_ids))
+                .where(Task.meeting_id.in_(select(Meeting.id).where(Meeting.owner_id == owner_id)))
+                .values(
+                    status=status,
+                    updated_at=now,
+                    owner_id=func.coalesce(Task.owner_id, owner_id),
+                )
             )
-            conn.commit()
-            updated_count = cur.rowcount
-        finally:
-            conn.close()
-        return updated_count
+            result = session.execute(stmt)
+            session.commit()
+            return result.rowcount or 0
 
     def get_tasks_by_ids(self, ids: Iterable[str], *, owner_id: str) -> list[dict[str, Any]]:
         task_ids = [task_id for task_id in ids if task_id]
         self._audit("get_tasks_by_ids", resource="task", details={"ids": task_ids})
         if not task_ids:
             return []
-        placeholders = ",".join("?" for _ in task_ids)
-        conn = self._db.connect()
-        try:
-            rows = conn.execute(
-                f"""
-                SELECT
-                    t.*,
-                    u.jira_account_id AS assignee_jira_account_id,
-                    u.display_name AS assignee_display_name
-                FROM tasks t
-                JOIN meetings m ON m.id = t.meeting_id
-                LEFT JOIN users u ON u.id = t.assignee_id
-                    AND (u.owner_id = ? OR u.owner_id IS NULL OR u.owner_id = 'system')
-                WHERE t.id IN ({placeholders}) AND m.owner_id = ?
-                """,
-                [owner_id, *task_ids, owner_id],
-            ).fetchall()
-            return [mappers.serialize_task_row(row) for row in rows]
-        finally:
-            conn.close()
+        with self._db.session() as session:
+            rows = (
+                session.query(Task, User)
+                .join(Meeting, Task.meeting_id == Meeting.id)
+                .outerjoin(
+                    User,
+                    (User.id == Task.assignee_id)
+                    & or_(User.owner_id == owner_id, User.owner_id.is_(None), User.owner_id == "system"),
+                )
+                .filter(Task.id.in_(task_ids), Meeting.owner_id == owner_id)
+                .all()
+            )
+            return [mappers.serialize_task_row(task, assignee) for task, assignee in rows]
 
     def mark_task_pushed_to_jira(
             self, task_id: str, *, issue_key: str, issue_url: str | None, owner_id: str
@@ -342,83 +284,69 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
             details={"task_id": task_id, "issue_key": issue_key, "issue_url": issue_url},
         )
         now = utc_now_iso()
-        conn = self._db.connect()
-        try:
-            cur = conn.execute(
-                """
-                UPDATE tasks
-                SET status = 'approved',
-                    jira_issue_key = ?,
-                    jira_issue_url = ?,
-                    pushed_to_jira_at = ?,
-                    updated_at = ?,
-                    owner_id = COALESCE(owner_id, ?)
-                WHERE id = ?
-                  AND meeting_id IN (SELECT id FROM meetings WHERE owner_id = ?)
-                """,
-                (issue_key, issue_url, now, now, owner_id, task_id, owner_id),
+        with self._db.session() as session:
+            task = (
+                session.query(Task)
+                .join(Meeting, Task.meeting_id == Meeting.id)
+                .filter(Task.id == task_id, Meeting.owner_id == owner_id)
+                .first()
             )
-            if cur.rowcount == 0:
+            if not task:
                 raise ValueError("Task not found")
-            conn.commit()
-        finally:
-            conn.close()
+            task.status = "approved"
+            task.jira_issue_key = issue_key
+            task.jira_issue_url = issue_url
+            task.pushed_to_jira_at = now
+            task.updated_at = now
+            task.owner_id = task.owner_id or owner_id
+            session.commit()
 
     def list_users(self, *, owner_id: str) -> list[dict[str, Any]]:
-        conn = self._db.connect()
-        try:
-            rows = conn.execute(
-                """
-                SELECT id, display_name, email, jira_account_id, voice_sample_path
-                FROM users
-                WHERE owner_id = ?
-                ORDER BY display_name
-                """,
-                (owner_id,),
-            ).fetchall()
+        with self._db.session() as session:
+            users = (
+                session.query(User)
+                .filter(User.owner_id == owner_id)
+                .order_by(User.display_name.asc())
+                .all()
+            )
             return [
                 {
-                    "id": row["id"],
-                    "displayName": row["display_name"],
-                    "email": row["email"],
-                    "jiraAccountId": row["jira_account_id"],
-                    "voiceSamplePath": row["voice_sample_path"],
+                    "id": user.id,
+                    "displayName": user.display_name,
+                    "email": user.email,
+                    "jiraAccountId": user.jira_account_id,
+                    "voiceSamplePath": user.voice_sample_path,
                 }
-                for row in rows
+                for user in users
             ]
-        finally:
-            conn.close()
 
     def get_user(self, user_id: str, *, owner_id: str) -> dict[str, Any] | None:
-        conn = self._db.connect()
-        try:
-            row = conn.execute(
-                "SELECT id, display_name, email, jira_account_id FROM users WHERE id = ? AND owner_id = ?",
-                (user_id, owner_id),
-            ).fetchone()
-            if not row:
+        with self._db.session() as session:
+            user = (
+                session.query(User)
+                .filter(User.id == user_id, User.owner_id == owner_id)
+                .first()
+            )
+            if not user:
                 return None
             return {
-                "id": row["id"],
-                "displayName": row["display_name"],
-                "email": row["email"],
-                "jiraAccountId": row["jira_account_id"],
+                "id": user.id,
+                "displayName": user.display_name,
+                "email": user.email,
+                "jiraAccountId": user.jira_account_id,
             }
-        finally:
-            conn.close()
 
     def update_user_jira_account(self, user_id: str, account_id: str, *, owner_id: str) -> None:
-        conn = self._db.connect()
-        try:
-            cur = conn.execute(
-                "UPDATE users SET jira_account_id = ? WHERE id = ? AND owner_id = ?",
-                (account_id, user_id, owner_id),
+        with self._db.session() as session:
+            user = (
+                session.query(User)
+                .filter(User.id == user_id, User.owner_id == owner_id)
+                .first()
             )
-            conn.commit()
-            if cur.rowcount == 0:
+            if not user:
                 raise ValueError("User not found")
-        finally:
-            conn.close()
+            user.jira_account_id = account_id
+            session.commit()
 
     # --- Ports implementation -------------------------------------------
     def create_meeting_stub(
@@ -433,58 +361,45 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
     ) -> None:
         self._audit("create_stub", meeting_id=meeting_id, details={"title": title})
         now = utc_now_iso()
-        conn = self._db.connect()
-        try:
-            existing_owner = conn.execute(
-                "SELECT owner_id FROM meetings WHERE id = ?", (meeting_id,)
-            ).fetchone()
-            if existing_owner and existing_owner["owner_id"] not in (None, owner_id):
+        with self._db.session() as session:
+            meeting = session.get(Meeting, meeting_id)
+            if meeting and meeting.owner_id not in (None, owner_id):
                 raise ValueError("Meeting already exists for a different user")
-            conn.execute(
-                """
-                INSERT INTO meetings(id, title, created_at, started_at, status, source_url, project_key, owner_id)
-                VALUES(?,?,?,?,?,?,?,?)
-                ON CONFLICT(id) DO UPDATE SET
-                    title=excluded.title,
-                    started_at=excluded.started_at,
-                    status='queued',
-                    source_url=excluded.source_url,
-                    project_key=COALESCE(excluded.project_key, meetings.project_key),
-                    owner_id=excluded.owner_id
-                """,
-                (
-                    meeting_id,
-                    title,
-                    now,
-                    started_at,
-                    MeetingStatus.QUEUED.value,
-                    blob_url,
-                    project_key,
-                    owner_id,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+            if meeting:
+                meeting.title = title
+                meeting.started_at = started_at
+                meeting.status = MeetingStatus.QUEUED.value
+                meeting.source_url = blob_url
+                if project_key:
+                    meeting.project_key = project_key
+                meeting.owner_id = owner_id
+            else:
+                session.add(
+                    Meeting(
+                        id=meeting_id,
+                        title=title,
+                        created_at=now,
+                        started_at=started_at,
+                        status=MeetingStatus.QUEUED.value,
+                        source_url=blob_url,
+                        project_key=project_key,
+                        owner_id=owner_id,
+                    )
+                )
+            session.commit()
 
     def update_meeting_status(self, meeting_id: str, status: str, *, owner_id: str | None = None) -> None:
         self._audit("status_change", meeting_id=meeting_id, details={"status": status})
-        conn = self._db.connect()
-        try:
-            if owner_id:
-                conn.execute(
-                    """
-                    UPDATE meetings
-                    SET status = ?, owner_id = COALESCE(owner_id, ?)
-                    WHERE id = ? AND (owner_id = ? OR owner_id IS NULL)
-                    """,
-                    (status, owner_id, meeting_id, owner_id),
-                )
-            else:
-                conn.execute("UPDATE meetings SET status = ? WHERE id = ?", (status, meeting_id))
-            conn.commit()
-        finally:
-            conn.close()
+        with self._db.session() as session:
+            meeting = session.get(Meeting, meeting_id)
+            if not meeting:
+                return
+            if owner_id and meeting.owner_id not in (None, owner_id):
+                return
+            meeting.status = status
+            if owner_id and not meeting.owner_id:
+                meeting.owner_id = owner_id
+            session.commit()
 
     def store_meeting_and_result(
             self,
@@ -508,101 +423,73 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         now = utc_now_iso()
         meeting_title = title or filename
         meeting_started_at = started_at or now
-        conn = self._db.connect()
-        try:
-            existing = conn.execute(
-                "SELECT owner_id FROM meetings WHERE id = ?", (meeting_id,)
-            ).fetchone()
-            current_owner = existing["owner_id"] if existing else None
+        with self._db.session() as session:
+            meeting = session.get(Meeting, meeting_id)
+            current_owner = meeting.owner_id if meeting else None
             final_owner = owner_id or current_owner
-            if existing and current_owner and owner_id and current_owner != owner_id:
+            if meeting and current_owner and owner_id and current_owner != owner_id:
                 raise ValueError("Meeting belongs to a different user")
-            if existing:
-                conn.execute(
-                    """
-                    UPDATE meetings
-                    SET title = ?, transcript = ?, started_at = ?, status = 'completed',
-                        source_text = ?, source_url = COALESCE(source_url, ?), project_key = COALESCE(project_key, ?),
-                        owner_id = COALESCE(owner_id, ?)
-                    WHERE id = ? AND (owner_id = ? OR owner_id IS NULL)
-                    """,
-                    (
-                        meeting_title,
-                        transcript,
-                        meeting_started_at,
-                        transcript,
-                        blob_url,
-                        project_key,
-                        final_owner,
-                        meeting_id,
-                        final_owner,
-                    ),
-                )
+            if meeting:
+                meeting.title = meeting_title
+                meeting.transcript = transcript
+                meeting.started_at = meeting_started_at
+                meeting.status = MeetingStatus.COMPLETED.value
+                meeting.source_text = transcript
+                meeting.source_url = meeting.source_url or blob_url
+                meeting.project_key = meeting.project_key or project_key
+                meeting.owner_id = meeting.owner_id or final_owner
             else:
-                conn.execute(
-                    """
-                    INSERT INTO meetings(id, title, transcript, created_at, started_at, status, source_text, source_url, project_key, owner_id)
-                    VALUES(?,?,?,?,?,?,?,?,?,?)
-                    """,
-                    (
-                        meeting_id,
-                        meeting_title,
-                        transcript,
-                        now,
-                        meeting_started_at,
-                        MeetingStatus.COMPLETED.value,
-                        transcript,
-                        blob_url,
-                        project_key,
-                        final_owner,
-                    ),
+                session.add(
+                    Meeting(
+                        id=meeting_id,
+                        title=meeting_title,
+                        transcript=transcript,
+                        created_at=now,
+                        started_at=meeting_started_at,
+                        status=MeetingStatus.COMPLETED.value,
+                        source_text=transcript,
+                        source_url=blob_url,
+                        project_key=project_key,
+                        owner_id=final_owner,
+                    )
                 )
-            conn.execute("DELETE FROM tasks WHERE meeting_id = ?", (meeting_id,))
-            conn.execute("DELETE FROM extraction_runs WHERE meeting_id = ?", (meeting_id,))
+            session.execute(delete(Task).where(Task.meeting_id == meeting_id))
+            session.execute(delete(ExtractionRun).where(ExtractionRun.meeting_id == meeting_id))
             run_id = str(uuid.uuid4())
-            conn.execute(
-                """
-                INSERT INTO extraction_runs(id, meeting_id, payload_json, created_at)
-                VALUES(?,?,?,?)
-                """,
-                (run_id, meeting_id, json.dumps(result_model.dict()), now),
+            session.add(
+                ExtractionRun(
+                    id=run_id,
+                    meeting_id=meeting_id,
+                    payload_json=json.dumps(result_model.model_dump()),
+                    created_at=now,
+                )
             )
             for task in result_model.tasks:
                 labels = getattr(task, "labels", []) or []
-                source_quote = (task.quotes or [None])[0] if hasattr(task, "quotes") else None
+                source_quote = (task.quotes or [None])[0] if getattr(task, "quotes", None) else None
                 assignee_name = getattr(task, "assignee_name", None)
                 assignee_id = None
                 if assignee_name:
-                    assignee_id = self._find_user_id_by_name(conn, assignee_name, owner_id)
-                conn.execute(
-                    """
-                    INSERT INTO tasks(
-                        id, meeting_id, summary, description, issue_type, priority, owner_id,
-                        story_points, assignee_id, labels, status, source_quote,
-                        created_at, updated_at
+                    assignee_id = self._find_user_id_by_name(session, assignee_name, final_owner or owner_id)
+                session.add(
+                    Task(
+                        id=str(uuid.uuid4()),
+                        meeting_id=meeting_id,
+                        summary=task.summary,
+                        description=task.description,
+                        issue_type=task.issue_type.value,
+                        priority=task.priority.value,
+                        story_points=getattr(task, "story_points", None),
+                        assignee_id=assignee_id,
+                        labels=json.dumps(labels),
+                        status="draft",
+                        source_quote=source_quote,
+                        created_at=now,
+                        updated_at=now,
+                        owner_id=final_owner,
                     )
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """,
-                    (
-                        str(uuid.uuid4()),
-                        meeting_id,
-                        task.summary,
-                        task.description,
-                        task.issue_type.value,
-                        task.priority.value,
-                        final_owner,
-                        getattr(task, "story_points", None),
-                        assignee_id,
-                        json.dumps(labels),
-                        "draft",
-                        source_quote,
-                        now,
-                        now,
-                    ),
                 )
-            conn.commit()
-        finally:
-            conn.close()
+            session.commit()
         return meeting_id, run_id
 
     def register_voice_profile(
@@ -611,32 +498,29 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         normalized = display_name.strip()
         if not normalized:
             raise ValueError("display_name is required")
-        conn = self._db.connect()
-        try:
-            row = conn.execute(
-                "SELECT id FROM users WHERE lower(display_name) = lower(?) AND owner_id = ?",
-                (normalized, owner_id),
-            ).fetchone()
-            if row:
-                conn.execute(
-                    """
-                    UPDATE users
-                    SET display_name = ?, voice_sample_path = COALESCE(?, voice_sample_path)
-                    WHERE id = ? AND owner_id = ?
-                    """,
-                    (normalized, voice_sample_path, row["id"], owner_id),
-                )
-                conn.commit()
-                return row["id"]
-            user_id = str(uuid.uuid4())
-            conn.execute(
-                "INSERT INTO users(id, display_name, voice_sample_path, owner_id) VALUES(?,?,?,?)",
-                (user_id, normalized, voice_sample_path, owner_id),
+        with self._db.session() as session:
+            existing = (
+                session.query(User)
+                .filter(func.lower(User.display_name) == normalized.lower(), User.owner_id == owner_id)
+                .first()
             )
-            conn.commit()
+            if existing:
+                if voice_sample_path:
+                    existing.voice_sample_path = voice_sample_path
+                existing.display_name = normalized
+                session.commit()
+                return existing.id
+            user_id = str(uuid.uuid4())
+            session.add(
+                User(
+                    id=user_id,
+                    display_name=normalized,
+                    voice_sample_path=voice_sample_path,
+                    owner_id=owner_id,
+                )
+            )
+            session.commit()
             return user_id
-        finally:
-            conn.close()
 
     def update_user_voice_sample(
             self, user_id: str, display_name: str, voice_sample_path: str, *, owner_id: str
@@ -644,31 +528,36 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         normalized = display_name.strip()
         if not normalized:
             raise ValueError("display_name is required")
-        conn = self._db.connect()
-        try:
-            row = conn.execute("SELECT id FROM users WHERE id = ? AND owner_id = ?", (user_id, owner_id)).fetchone()
-            if not row:
-                raise ValueError("User not found")
-            conn.execute(
-                "UPDATE users SET display_name = ?, voice_sample_path = ? WHERE id = ? AND owner_id = ?",
-                (normalized, voice_sample_path, user_id, owner_id),
+        with self._db.session() as session:
+            user = (
+                session.query(User)
+                .filter(User.id == user_id, User.owner_id == owner_id)
+                .first()
             )
-            conn.commit()
+            if not user:
+                raise ValueError("User not found")
+            user.display_name = normalized
+            user.voice_sample_path = voice_sample_path
+            session.commit()
             return user_id
-        finally:
-            conn.close()
 
-    def _find_user_id_by_name(self, conn: sqlite3.Connection, display_name: str, owner_id: str) -> str | None:
-        row = conn.execute(
-            """
-            SELECT id
-            FROM users
-            WHERE lower(display_name) = lower(?)
-              AND (owner_id = ? OR owner_id IS NULL OR owner_id = 'system')
-            """,
-            (display_name.strip(), owner_id),
-        ).fetchone()
-        return row["id"] if row else None
+    def _find_user_id_by_name(self, session: Session, display_name: str, owner_id: str | None) -> str | None:
+        normalized = display_name.strip()
+        if not normalized:
+            return None
+        user = (
+            session.query(User)
+            .filter(
+                func.lower(User.display_name) == normalized.lower(),
+                or_(
+                    User.owner_id == owner_id,
+                    User.owner_id.is_(None),
+                    User.owner_id == "system",
+                ),
+            )
+            .first()
+        )
+        return user.id if user else None
 
 
 __all__ = [

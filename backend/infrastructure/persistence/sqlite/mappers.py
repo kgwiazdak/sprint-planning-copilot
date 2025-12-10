@@ -1,48 +1,40 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from typing import Any
 
+from .database import Meeting, Task, User
 
-def serialize_meeting_row(row: sqlite3.Row) -> dict[str, Any]:
-    started = row["started_at"] or row["created_at"]
+
+def serialize_meeting_row(meeting: Meeting, draft_count: int = 0) -> dict[str, Any]:
+    started = meeting.started_at or meeting.created_at
     return {
-        "id": row["id"],
-        "title": row["title"],
+        "id": meeting.id,
+        "title": meeting.title,
         "startedAt": started,
-        "status": row["status"] or "pending",
-        "draftTaskCount": row["draft_count"],
-        "projectKey": row["project_key"] if "project_key" in row.keys() else None,
+        "status": meeting.status or "pending",
+        "draftTaskCount": draft_count,
+        "projectKey": meeting.project_key,
     }
 
 
-def serialize_task_row(row: sqlite3.Row) -> dict[str, Any]:
-    labels = json.loads(row["labels"]) if row["labels"] else []
-    keys = set(row.keys()) if hasattr(row, "keys") else set()
-    assignee_account = None
-    if "assignee_jira_account_id" in keys:
-        assignee_account = row["assignee_jira_account_id"]
-    elif "jira_account_id" in keys:
-        assignee_account = row["jira_account_id"]
-    assignee_name = None
-    if "assignee_display_name" in keys:
-        assignee_name = row["assignee_display_name"]
+def serialize_task_row(task: Task, assignee: User | None = None) -> dict[str, Any]:
+    labels = json.loads(task.labels) if task.labels else []
     return {
-        "id": row["id"],
-        "meetingId": row["meeting_id"],
-        "summary": row["summary"],
-        "description": row["description"] or "",
-        "issueType": row["issue_type"],
-        "priority": row["priority"],
-        "storyPoints": row["story_points"],
-        "assigneeId": row["assignee_id"],
-        "assigneeName": assignee_name,
-        "assigneeAccountId": assignee_account,
+        "id": task.id,
+        "meetingId": task.meeting_id,
+        "summary": task.summary,
+        "description": task.description or "",
+        "issueType": task.issue_type,
+        "priority": task.priority,
+        "storyPoints": task.story_points,
+        "assigneeId": task.assignee_id,
+        "assigneeName": assignee.display_name if assignee else None,
+        "assigneeAccountId": assignee.jira_account_id if assignee else None,
         "labels": labels,
-        "status": row["status"],
-        "sourceQuote": row["source_quote"],
-        "jiraIssueKey": row["jira_issue_key"] if "jira_issue_key" in keys else None,
-        "jiraIssueUrl": row["jira_issue_url"] if "jira_issue_url" in keys else None,
-        "pushedToJiraAt": row["pushed_to_jira_at"] if "pushed_to_jira_at" in keys else None,
+        "status": task.status,
+        "sourceQuote": task.source_quote,
+        "jiraIssueKey": task.jira_issue_key,
+        "jiraIssueUrl": task.jira_issue_url,
+        "pushedToJiraAt": task.pushed_to_jira_at,
     }

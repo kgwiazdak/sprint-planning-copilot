@@ -2,123 +2,146 @@ from __future__ import annotations
 
 import datetime
 import pathlib
-import sqlite3
+
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    event,
+)
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker, Session
 
 from .constants import DEFAULT_DB_URL
+
+
+Base = declarative_base()
 
 
 def utc_now_iso() -> str:
     return datetime.datetime.utcnow().isoformat()
 
 
+class Meeting(Base):
+    __tablename__ = "meetings"
+
+    id = Column(String, primary_key=True)
+    title = Column(String, nullable=False)
+    transcript = Column(Text)
+    created_at = Column(String, nullable=False)
+    started_at = Column(String)
+    status = Column(String, default="queued")
+    source_url = Column(String)
+    source_text = Column(Text)
+    project_key = Column(String)
+    owner_id = Column(String)
+
+    tasks = relationship(
+        "Task",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    runs = relationship(
+        "ExtractionRun",
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+
+    id = Column(String, primary_key=True)
+    meeting_id = Column(String, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    summary = Column(Text, nullable=False)
+    description = Column(Text)
+    issue_type = Column(String, nullable=False)
+    priority = Column(String, nullable=False)
+    story_points = Column(Integer)
+    assignee_id = Column(String, ForeignKey("users.id"), nullable=True)
+    labels = Column(Text)
+    status = Column(String, nullable=False, default="draft")
+    source_quote = Column(Text)
+    jira_issue_key = Column(String)
+    jira_issue_url = Column(String)
+    pushed_to_jira_at = Column(String)
+    created_at = Column(String, nullable=False)
+    updated_at = Column(String, nullable=False)
+    owner_id = Column(String)
+
+    meeting = relationship("Meeting", back_populates="tasks")
+    assignee = relationship("User", back_populates="tasks", foreign_keys=[assignee_id])
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True)
+    display_name = Column(String, nullable=False)
+    email = Column(String)
+    jira_account_id = Column(String)
+    voice_sample_path = Column(String)
+    owner_id = Column(String)
+
+    tasks = relationship("Task", back_populates="assignee", passive_deletes=True)
+
+
+class ExtractionRun(Base):
+    __tablename__ = "extraction_runs"
+
+    id = Column(String, primary_key=True)
+    meeting_id = Column(String, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    payload_json = Column(Text, nullable=False)
+    created_at = Column(String, nullable=False)
+
+    meeting = relationship("Meeting", back_populates="runs")
+
+
 class SqliteDatabase:
-    """Manages the sqlite connection lifecycle and schema creation."""
+    """Manages the SQLAlchemy engine, sessions, and schema creation."""
 
     def __init__(self, url: str | None = None) -> None:
         self._db_url = url or DEFAULT_DB_URL
         if not self._db_url.startswith("sqlite"):
             raise ValueError("Only sqlite URLs are supported.")
-        self._db_path = self._db_url.split("///")[-1]
-        pathlib.Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_schema()
+        db_path = self._db_url.split("///")[-1]
+        pathlib.Path(db_path).parent.mkdir(parents=True, exist_ok=True)
 
-    def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db_path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
+        self._engine = create_engine(self._db_url, future=True, connect_args={"check_same_thread": False})
+        self._session_factory = sessionmaker(bind=self._engine, expire_on_commit=False, autoflush=False)
 
-    def _ensure_schema(self) -> None:
-        conn = self.connect()
-        try:
-            _init_schema(conn)
-        finally:
-            conn.close()
+        # Ensure foreign key constraints are enforced for SQLite.
+        @event.listens_for(self._engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):  # noqa: ANN001
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
 
+        Base.metadata.create_all(self._engine)
+        self._ensure_columns()
 
-def _init_schema(conn: sqlite3.Connection) -> None:
-    cur = conn.cursor()
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS meetings(
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            transcript TEXT,
-            created_at TEXT NOT NULL,
-            started_at TEXT,
-            status TEXT DEFAULT 'queued',
-            source_url TEXT,
-            source_text TEXT,
-            project_key TEXT,
-            owner_id TEXT
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS extraction_runs(
-            id TEXT PRIMARY KEY,
-            meeting_id TEXT NOT NULL,
-            payload_json TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS tasks(
-            id TEXT PRIMARY KEY,
-            meeting_id TEXT NOT NULL,
-            summary TEXT NOT NULL,
-            description TEXT,
-            issue_type TEXT NOT NULL,
-            priority TEXT NOT NULL,
-            story_points INTEGER,
-            assignee_id TEXT,
-            labels TEXT,
-            status TEXT NOT NULL DEFAULT 'draft',
-            source_quote TEXT,
-            jira_issue_key TEXT,
-            jira_issue_url TEXT,
-            pushed_to_jira_at TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            owner_id TEXT,
-            FOREIGN KEY(meeting_id) REFERENCES meetings(id) ON DELETE CASCADE
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users(
-            id TEXT PRIMARY KEY,
-            display_name TEXT NOT NULL,
-            email TEXT,
-            jira_account_id TEXT,
-            voice_sample_path TEXT,
-            owner_id TEXT
-        )
-        """
-    )
-    conn.commit()
-    _ensure_column(conn, "tasks", "jira_issue_key", "TEXT")
-    _ensure_column(conn, "tasks", "jira_issue_url", "TEXT")
-    _ensure_column(conn, "tasks", "pushed_to_jira_at", "TEXT")
-    _ensure_column(conn, "users", "jira_account_id", "TEXT")
-    _ensure_column(conn, "users", "voice_sample_path", "TEXT")
-    _ensure_column(conn, "meetings", "project_key", "TEXT")
-    _ensure_column(conn, "meetings", "owner_id", "TEXT")
-    _ensure_column(conn, "tasks", "owner_id", "TEXT")
-    _ensure_column(conn, "users", "owner_id", "TEXT")
-    conn.commit()
+    def session(self) -> Session:
+        return self._session_factory()
 
+    def _ensure_columns(self) -> None:
+        """Backfill columns that may be missing in existing databases."""
+        with self._engine.begin() as conn:
+            self._add_column_if_missing(conn, "tasks", "jira_issue_key", "TEXT")
+            self._add_column_if_missing(conn, "tasks", "jira_issue_url", "TEXT")
+            self._add_column_if_missing(conn, "tasks", "pushed_to_jira_at", "TEXT")
+            self._add_column_if_missing(conn, "tasks", "owner_id", "TEXT")
+            self._add_column_if_missing(conn, "meetings", "project_key", "TEXT")
+            self._add_column_if_missing(conn, "meetings", "owner_id", "TEXT")
+            self._add_column_if_missing(conn, "users", "jira_account_id", "TEXT")
+            self._add_column_if_missing(conn, "users", "voice_sample_path", "TEXT")
+            self._add_column_if_missing(conn, "users", "owner_id", "TEXT")
 
-def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
-    cur = conn.cursor()
-    existing = {
-        row["name"]
-        for row in cur.execute(f"PRAGMA table_info({table})").fetchall()
-    }
-    if column not in existing:
-        cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    @staticmethod
+    def _add_column_if_missing(conn, table: str, column: str, definition: str) -> None:
+        existing = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()}
+        if column not in existing:
+            conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
