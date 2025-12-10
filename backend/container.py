@@ -46,10 +46,7 @@ class MockTranscriber(TranscriptionPort):
     )
 
     def __init__(self, transcript: str | None = None) -> None:
-        default = (
-            "Team discussed sprint goals, backlog grooming, owners for actions, "
-            "and follow-ups on blockers and demo prep."
-        )
+        default = _default_mock_transcript()
         self._transcript = transcript.strip() if transcript else default
 
     def set_owner(self, owner_id: str | None) -> None:
@@ -57,6 +54,40 @@ class MockTranscriber(TranscriptionPort):
 
     def transcribe(self, content: bytes, filename: str) -> str:
         return self._transcript
+
+
+def _default_mock_transcript() -> str:
+    """Deterministic transcript matching the bundled mock audio storyline."""
+    return "\n".join(
+        [
+            "Adrian Puchacki: Morning team, let's keep this simple. We need four tasks and clear owners.",
+            "Waldemar Walasik: Morning. Training still takes four hours on Azure, even after the ingest refactor.",
+            "Wojciech Puczyk: I can parallelize preprocessing with Dask. Nice and clear: that would be my task.",
+            "Adrian Puchacki: Great, Wojciech owns Dask parallelization. How many points would that be?",
+            "Wojciech Puczyk: Let's vote it at 5 points. It's mostly wiring and testing.",
+            "Adrian Puchacki: Done. Task one: Wojciech, Dask parallelization, 5 points.",
+            "Waldemar Walasik: After that, I will update the model registry and redeploy via MLflow. That's my task.",
+            "Adrian Puchacki: How many points do you want for the registry and redeploy, Waldemar?",
+            "Waldemar Walasik: Call it 3 points. Small changes and smoke tests.",
+            "Adrian Puchacki: Good. Task two: Waldemar, registry update plus redeploy, 3 points.",
+            "Adrian Puchacki: We also need drift detection and alerting. Waldemar, do you want that too?",
+            "Waldemar Walasik: Yes, I'll take drift alerts. Simple rule: alert if accuracy drops more than three percent.",
+            "Adrian Puchacki: Points for drift alerting?",
+            "Waldemar Walasik: 3 points is fine, includes Slack notification and MLflow log.",
+            "Adrian Puchacki: Task three: Waldemar, drift detection and alerting, 3 points.",
+            "Wojciech Puczyk: Do we need a release brief for stakeholders?",
+            "Adrian Puchacki: Yes, I'll own the release-readiness checklist and brief. Very small.",
+            "Waldemar Walasik: How many points for your brief, Adrian?",
+            "Adrian Puchacki: 1 point. Just making sure it's tracked.",
+            "Adrian Puchacki: Task four: Adrian, release brief and checklist, 1 point.",
+            "Wojciech Puczyk: Recap so we don't mess it up: I own Dask parallelization, 5 points.",
+            "Waldemar Walasik: I own registry plus redeploy for 3 points, and drift alerting for 3 points.",
+            "Adrian Puchacki: And I own the release brief at 1 point. Four tasks total, owners clear.",
+            "Wojciech Puczyk: Timeline: finish by Thursday, quick demo Friday. Let's keep it simple.",
+            "Waldemar Walasik: No extra tasks hiding here. Just these four.",
+            "Adrian Puchacki: Perfect. Thanks—execute and update the board.",
+        ]
+    )
 
 
 @lru_cache(maxsize=1)
@@ -83,14 +114,19 @@ def get_worker_blob_storage() -> BlobStorageService | None:
 
 @lru_cache(maxsize=1)
 def get_transcriber() -> TranscriptionPort | None:
-    if os.getenv("MOCK_TRANSCRIBER", "").lower() in {"1", "true", "yes", "on"}:
+    settings = get_settings()
+    mock_flag = os.getenv("MOCK_TRANSCRIBER", "").lower() in {"1", "true", "yes", "on"}
+    prefer_mock_audio = settings.mock_audio.enabled and os.getenv(
+        "MOCK_TRANSCRIBER_FOR_MOCK_AUDIO", "true"
+    ).lower() in {"1", "true", "yes", "on"}
+    if mock_flag or prefer_mock_audio:
         return MockTranscriber(os.getenv("MOCK_TRANSCRIPT_TEXT"))
-    cfg = get_settings().azure_speech
+    cfg = settings.azure_speech
     if not cfg.key or not cfg.region:
         return None
     intro_dir = _ensure_intro_samples_dir()
     intro_loader = _build_intro_loader()
-    if get_settings().mock_audio.enabled:
+    if settings.mock_audio.enabled:
         try:
             get_mock_audio_path()
         except Exception:  # pragma: no cover - defensive

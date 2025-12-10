@@ -19,6 +19,7 @@ class MLflowTelemetryAdapter(TelemetryPort):
             meeting_date: str,
             transcript_blob_uri: str | None,
             telemetry: dict | None = None,
+            diarization_payload: dict | None = None,
     ) -> None:
         try:
             log_mlflow_access("log_run", meeting_id=meeting_id, run_id=run_id)
@@ -30,6 +31,7 @@ class MLflowTelemetryAdapter(TelemetryPort):
                 meeting_date=meeting_date,
                 transcript_blob_uri=transcript_blob_uri,
                 telemetry=telemetry,
+                diarization_payload=diarization_payload,
             )
         except Exception as exc:  # pragma: no cover - defensive logging
             logger.exception(

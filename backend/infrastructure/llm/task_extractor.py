@@ -103,6 +103,12 @@ def _augment_with_known_voices(extracted: list[str]) -> list[str]:
         if len(candidates) == 1:
             _add(candidates[0])
 
+    # If diarization only surfaced one speaker but we have multiple known voices,
+    # allow all known voices so the LLM can still assign tasks correctly.
+    if len(resolved) <= 1 and known:
+        for name in known:
+            _add(name)
+
     return resolved
 
 

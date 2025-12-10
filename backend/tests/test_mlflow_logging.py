@@ -1,3 +1,4 @@
+from pathlib import Path
 from unittest.mock import patch
 
 from backend import mlflow_logging as logging_utils
@@ -99,3 +100,14 @@ def test_build_aggregate_metrics_sums_duplicates():
     assert metrics["latency_ms_total"] == 150.0
     assert metrics["cost_usd"] == 1.5
     assert metrics["approval_rate"] == 0.5
+
+
+@patch("backend.mlflow_logging.mlflow.log_artifact")
+def test_artifacts_log_to_parent_run(mock_log_artifact):
+    record = logging_utils.ArtifactRecord(path="artifacts/foo/bar.txt", content="hello", is_json=False)
+
+    logging_utils._log_artifact_content(record, run_id="parent-123")
+
+    kwargs = mock_log_artifact.call_args.kwargs
+    assert kwargs["run_id"] == "parent-123"
+    assert Path(kwargs["artifact_path"]) == Path("artifacts/foo")

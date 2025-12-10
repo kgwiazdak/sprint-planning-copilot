@@ -269,7 +269,7 @@ def log_extraction_run(
             _log_schema_contract()
 
             for phase in phase_data:
-                _log_phase_run(phase, tags, run_name)
+                _log_phase_run(phase, tags, run_name, active_run.info.run_id)
 
             report_html = _build_html_summary(
                 normalized_payload=normalized_payload,
@@ -684,7 +684,12 @@ def _derive_alerts(
     return {"flags": flags, "metrics": metrics, "tags": {f"alert_{key}": "true" for key in flags}}
 
 
-def _log_phase_run(phase: PhaseData, parent_tags: Mapping[str, str], parent_run_name: str) -> None:
+def _log_phase_run(
+        phase: PhaseData,
+        parent_tags: Mapping[str, str],
+        parent_run_name: str,
+        parent_run_id: str,
+) -> None:
     phase_tags = dict(parent_tags)
     phase_tags["step"] = phase.name
     try:
@@ -693,25 +698,36 @@ def _log_phase_run(phase: PhaseData, parent_tags: Mapping[str, str], parent_run_
                 _log_params_with_retry(phase.params)
             if phase.metrics:
                 _log_metrics_with_retry(phase.metrics)
-            for artifact in phase.artifacts:
-                _log_artifact_content(artifact)
     except MlflowException as exc:
         logger.warning("Unable to log nested MLflow run '%s': %s", phase.name, exc)
+    for artifact in phase.artifacts:
+        try:
+            _log_artifact_content(artifact, run_id=parent_run_id)
+        except ArtifactLoggingError as exc:
+            logger.warning("Unable to log artifact '%s' for phase '%s': %s", artifact.path, phase.name, exc)
 
 
-def _log_artifact_content(record: ArtifactRecord) -> None:
+def _log_artifact_content(record: ArtifactRecord, *, run_id: str | None = None) -> None:
     if record.is_json:
         content = json.dumps(record.content, ensure_ascii=False, indent=2)
     else:
         content = str(record.content)
-    _log_text_or_compressed(content, record.path, record.compressible)
+    _log_text_or_compressed(content, record.path, record.compressible, run_id=run_id)
 
 
-def _log_text_or_compressed(content: str, artifact_rel_path: str, compressible: bool) -> None:
+def _log_text_or_compressed(
+        content: str,
+        artifact_rel_path: str,
+        compressible: bool,
+        *,
+        run_id: str | None = None,
+) -> None:
     text = _scrub_secrets(content)
     data = text.encode("utf-8")
     filename = Path(artifact_rel_path).name
     artifact_dir = str(Path(artifact_rel_path).parent)
+    if artifact_dir == ".":
+        artifact_dir = ""
     use_compression = compressible and len(data) > ARTIFACT_COMPRESS_THRESHOLD
     if use_compression:
         data = gzip.compress(data)
@@ -720,7 +736,7 @@ def _log_text_or_compressed(content: str, artifact_rel_path: str, compressible: 
         temp_path = Path(tmpdir) / filename
         temp_path.write_bytes(data)
         try:
-            _retry(lambda: mlflow.log_artifact(str(temp_path), artifact_path=artifact_dir))
+            _retry(lambda: mlflow.log_artifact(str(temp_path), artifact_path=artifact_dir, run_id=run_id))
         except Exception as exc:
             raise ArtifactLoggingError(str(exc)) from exc
 
