@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-import chromadb
 from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
 from llama_index.core.embeddings import MockEmbedding as LlamaMockEmbedding
 from llama_index.core.llms import MockLLM
@@ -18,45 +17,13 @@ from llama_index.core.postprocessor import LLMRerank
 from llama_index.core.schema import NodeWithScore
 from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.llms.openai import OpenAI as LlamaOpenAI
-from llama_index.vector_stores.chroma import ChromaVectorStore
-from llama_index.vector_stores.chroma.base import _to_chroma_filter
+from llama_index.vector_stores.qdrant import QdrantVectorStore
+from qdrant_client import QdrantClient
+from qdrant_client.http.exceptions import ResponseHandlingException
 
 from backend.schemas import ExtractionResult, Task
 
 logger = logging.getLogger(__name__)
-
-
-def _patch_chroma_where_default() -> None:
-    """Avoid Chroma rejecting empty metadata filters (where={})."""
-
-    if getattr(ChromaVectorStore, "_empty_where_patched", False):
-        return
-    # Silence noisy client telemetry and avoid failures when posthog misbehaves.
-    os.environ.setdefault("CHROMA_TELEMETRY", "0")
-
-    def _safe_query(self, query, **kwargs):
-        if query.filters is not None:
-            if "where" in kwargs:
-                raise ValueError(
-                    "Cannot specify metadata filters via both query and kwargs. "
-                    "Use kwargs only for chroma specific items that are not supported via the generic query interface."
-                )
-            where = _to_chroma_filter(query.filters)
-        else:
-            where = kwargs.pop("where", None) or None
-
-        if not query.query_embedding:
-            return self._get(limit=query.similarity_top_k, where=where, **kwargs)
-
-        return self._query(
-            query_embeddings=query.query_embedding,
-            n_results=query.similarity_top_k,
-            where=where,
-            **kwargs,
-        )
-
-    ChromaVectorStore.query = _safe_query  # type: ignore[assignment]
-    ChromaVectorStore._empty_where_patched = True  # type: ignore[attr-defined]
 
 
 @dataclass
@@ -64,12 +31,17 @@ class RAGConfig:
     """Configuration for the LlamaIndex-powered RAG pipeline."""
 
     persist_dir: Path = Path(os.getenv("RAG_INDEX_DIR", "data/rag_index"))
+    qdrant_url: str | None = os.getenv("QDRANT_URL")
+    qdrant_api_key: str | None = os.getenv("QDRANT_API_KEY")
+    qdrant_grpc: bool = os.getenv("QDRANT_GRPC", "0").lower() in {"1", "true", "yes", "on"}
+    qdrant_location: str | None = os.getenv("QDRANT_LOCATION", "data/rag_qdrant")
     collection: str = os.getenv("RAG_COLLECTION", "sprint-planning")
     confluence_dir: Path = Path(os.getenv("RAG_CONFLUENCE_DIR", "mock_confluence"))
     chunk_size: int = int(os.getenv("RAG_CHUNK_SIZE", "600"))
     chunk_overlap: int = int(os.getenv("RAG_CHUNK_OVERLAP", "80"))
     top_k: int = int(os.getenv("RAG_TOP_K", "8"))
     rerank_top_k: int = int(os.getenv("RAG_RERANK_TOP_K", "4"))
+    rerank_model: str = os.getenv("RAG_RERANK_MODEL", os.getenv("RAG_LLM_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini")))
     embedding_model: str = os.getenv("RAG_EMBEDDING_MODEL", "text-embedding-3-small")
     llm_model: str = os.getenv("RAG_LLM_MODEL", os.getenv("OPENAI_MODEL", "gpt-4o-mini"))
     use_mock_embeddings: bool = field(
@@ -88,15 +60,11 @@ class RAGEstimator:
     def __init__(self, config: RAGConfig | None = None) -> None:
         self._config = config or RAGConfig()
         self._config.persist_dir.mkdir(parents=True, exist_ok=True)
-        _patch_chroma_where_default()
+        Settings.llm = None  # avoid accidental default OpenAI usage
         self._embed_model = self._build_embedding_model()
         self._reranker = self._build_reranker()
-        self._client = chromadb.PersistentClient(path=str(self._config.persist_dir))
-        self._collection = self._client.get_or_create_collection(self._config.collection)
-        self._vector_store = ChromaVectorStore(
-            chroma_collection=self._collection,
-            persist_dir=str(self._config.persist_dir),
-        )
+        self._client = self._build_chroma_client()
+        self._vector_store = self._build_vector_store(self._client)
         self._storage = StorageContext.from_defaults(vector_store=self._vector_store)
         self._mock_llm = MockLLM() if self._config.use_mock_embeddings else None
         if self._mock_llm:
@@ -111,6 +79,36 @@ class RAGEstimator:
             chunk_overlap=self._config.chunk_overlap,
         )
         self._confluence_seeded = False
+
+    def _build_chroma_client(self):
+        # renamed to keep wiring minimal; builds Qdrant client.
+        if self._config.use_mock_embeddings:
+            return QdrantClient(location=":memory:", prefer_grpc=False)
+        if self._config.qdrant_url:
+            logger.info("Using remote Qdrant url=%s collection=%s", self._config.qdrant_url, self._config.collection)
+            return QdrantClient(
+                url=self._config.qdrant_url,
+                api_key=self._config.qdrant_api_key,
+                prefer_grpc=self._config.qdrant_grpc,
+            )
+        location = self._config.qdrant_location or str(self._config.persist_dir)
+        Path(location).parent.mkdir(parents=True, exist_ok=True)
+        logger.info("Using local Qdrant location=%s collection=%s", location, self._config.collection)
+        return QdrantClient(location=location, prefer_grpc=False)
+
+    def _build_vector_store(self, client: QdrantClient) -> QdrantVectorStore:
+        try:
+            return QdrantVectorStore(
+                client=client,
+                collection_name=self._config.collection,
+                prefer_grpc=self._config.qdrant_grpc,
+            )
+        except ResponseHandlingException as exc:
+            logger.warning("Qdrant unavailable (%s); falling back to in-memory store.", exc)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Qdrant init failed (%s); falling back to in-memory store.", exc)
+        fallback_client = QdrantClient(location=":memory:", prefer_grpc=False)
+        return QdrantVectorStore(client=fallback_client, collection_name=self._config.collection, prefer_grpc=False)
 
     def _build_embedding_model(self):
         if self._config.use_mock_embeddings:
@@ -136,7 +134,7 @@ class RAGEstimator:
         try:
             provider = os.getenv("LLM_PROVIDER", "azure").lower()
             llm_kwargs: dict[str, Any] = {
-                "model": self._config.llm_model,
+                "model": self._config.rerank_model or self._config.llm_model,
                 "temperature": 0.0,
             }
             api_key = os.getenv("AZURE_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -149,7 +147,8 @@ class RAGEstimator:
                         "api_base": os.getenv("AZURE_OPENAI_ENDPOINT"),
                         "api_key": api_key,
                         "api_version": os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
-                        "azure_deployment": os.getenv("AZURE_OPENAI_DEPLOYMENT"),
+                        "azure_deployment": os.getenv("AZURE_OPENAI_RERANK_DEPLOYMENT")
+                        or os.getenv("AZURE_OPENAI_DEPLOYMENT"),
                     }
                 )
             else:
@@ -228,14 +227,18 @@ class RAGEstimator:
     def _retrieve(self, query: str) -> list[NodeWithScore]:
         postprocessors = [self._reranker] if self._reranker else []
         llm = self._mock_llm if self._mock_llm else None
-        engine = self._index.as_query_engine(
-            llm=llm,
-            similarity_top_k=self._config.top_k,
-            node_postprocessors=postprocessors,
-            response_mode="no_text",
-        )
-        response = engine.query(query)
-        return list(response.source_nodes)
+        try:
+            engine = self._index.as_query_engine(
+                llm=llm,
+                similarity_top_k=self._config.top_k,
+                node_postprocessors=postprocessors,
+                response_mode="no_text",
+            )
+            response = engine.query(query)
+            return list(response.source_nodes)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("RAG retrieval failed: %s", exc)
+            return []
 
     @staticmethod
     def _task_query(task: Task) -> str:
@@ -293,6 +296,7 @@ class RAGEstimator:
             "seeded_confluence": seeded_confluence,
             "ingested_history": ingested_history,
             "ingested_transcript_chunks": ingested_transcript,
+            "qdrant_target": self._config.qdrant_url or self._config.qdrant_location or "local",
         }
 
         updated_tasks: list[Task] = []

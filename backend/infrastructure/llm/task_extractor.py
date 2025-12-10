@@ -191,8 +191,12 @@ class LLMExtractor:
             "{{\n  \"tasks\": [\n    {{\n      \"summary\": str, \"description\": str, "
             "\"issue_type\": one of [\"Story\",\"Task\",\"Bug\",\"Spike\"], "
             "\"assignee_name\": str|null, \"priority\": one of [\"Low\",\"Medium\",\"High\"], "
-            "\"story_points\": int|null, \"labels\": [str], \"links\": [str], \"quotes\": [str]\n    }}\n  ]\n}}"
-            "\nIf no assignee, set null. Use quotes to include short verbatim snippets from the transcript that justify each task."
+            "\"story_points\": int, \"labels\": [str], \"links\": [str], \"quotes\": [str]\n    }}\n  ]\n}}"
+            "\nRules:\n"
+            "- ALWAYS set story_points to an integer. If the transcript explicitly states points, copy that number.\n"
+            "- If points are not explicitly stated, infer a reasonable estimate (1-8) based on effort; never leave it null.\n"
+            "- If no assignee, set assignee_name to null.\n"
+            "- Use quotes to include short verbatim snippets from the transcript that justify each task."
             f"{speaker_constraint}"
         )
         human = f"Transcript:\n{transcript}\n---\nReturn only JSON, no prose."
@@ -208,6 +212,7 @@ class LLMExtractor:
         result = LLMExtractor._parse_or_repair_response(llm, raw_response)
         return LLMExtractor._validate_assignees(result, valid_speakers), timings
 
+    @staticmethod
     @staticmethod
     def _validate_assignees(result: ExtractionResult, valid_speakers: list[str] | None) -> ExtractionResult:
         """Ensure all assignee_name values are valid speakers or set to None."""
