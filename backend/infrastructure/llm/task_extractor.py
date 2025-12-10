@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import time
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Mapping, MutableMapping, Any
@@ -143,8 +144,11 @@ def _fuzzy_match_speaker(name: str, valid_speakers: list[str], threshold: float 
 
 
 class LLMExtractor:
+    def __init__(self) -> None:
+        self.last_timings: dict[str, float] = {}
+
     @staticmethod
-    def _llm_chain(transcript: str, valid_speakers: list[str] | None = None) -> ExtractionResult:
+    def _llm_chain(transcript: str, valid_speakers: list[str] | None = None) -> tuple[ExtractionResult, dict[str, float]]:
         provider = os.getenv("LLM_PROVIDER", "azure").lower()
         if valid_speakers is None:
             valid_speakers = _augment_with_known_voices(_extract_speakers_from_transcript(transcript))
@@ -194,9 +198,15 @@ class LLMExtractor:
         human = f"Transcript:\n{transcript}\n---\nReturn only JSON, no prose."
         messages = [SystemMessage(content=system), HumanMessage(content=human)]
 
-        raw_response = llm.invoke(messages).content
+        raw_response, timings = LLMExtractor._invoke_with_timings(llm, messages)
+        timings.update(
+            {
+                "llm_provider": provider,
+                "llm_model_name": getattr(llm, "model_name", None) or os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+            }
+        )
         result = LLMExtractor._parse_or_repair_response(llm, raw_response)
-        return LLMExtractor._validate_assignees(result, valid_speakers)
+        return LLMExtractor._validate_assignees(result, valid_speakers), timings
 
     @staticmethod
     def _validate_assignees(result: ExtractionResult, valid_speakers: list[str] | None) -> ExtractionResult:
@@ -279,5 +289,38 @@ class LLMExtractor:
                 continue
         return ExtractionResult(tasks=valid_tasks) if valid_tasks else None
 
+    @staticmethod
+    def _invoke_with_timings(llm, messages) -> tuple[str, dict[str, float]]:
+        started = time.perf_counter()
+        content_parts: list[str] = []
+        first_token_time = None
+        try:
+            for chunk in llm.stream(messages):
+                if first_token_time is None:
+                    first_token_time = time.perf_counter()
+                piece = getattr(chunk, "content", None) or getattr(getattr(chunk, "message", None), "content", "") or ""
+                if piece:
+                    content_parts.append(piece)
+            finished = time.perf_counter()
+            ttft_ms = ((first_token_time or finished) - started) * 1000
+            ttl_ms = (finished - started) * 1000
+            return "".join(content_parts) or "", {
+                "llm_ttft_ms": ttft_ms,
+                "llm_ttl_ms": ttl_ms,
+                "latency_ms_llm": ttl_ms,
+            }
+        except Exception:
+            finished = time.perf_counter()
+            logger.debug("LLM streaming unavailable, falling back to blocking invoke.", exc_info=True)
+            completion = llm.invoke(messages).content
+            ttl_ms = (finished - started) * 1000
+            return completion, {
+                "llm_ttft_ms": ttl_ms,
+                "llm_ttl_ms": ttl_ms,
+                "latency_ms_llm": ttl_ms,
+            }
+
     def extract(self, transcript: str) -> ExtractionResult:
-        return self._llm_chain(transcript)
+        result, timings = self._llm_chain(transcript)
+        self.last_timings = timings
+        return result

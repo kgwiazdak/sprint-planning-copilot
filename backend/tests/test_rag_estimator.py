@@ -1,9 +1,11 @@
-from backend.application.services.rag_estimator import RAGEstimator
+from backend.application.services.rag_estimator import RAGConfig, RAGEstimator
 from backend.schemas import Task, ExtractionResult, IssueType, Priority
 
 
-def test_rag_estimator_keeps_explicit_points_and_estimates_missing(tmp_path):
-    rag = RAGEstimator(confluence_dir="mock_confluence")
+def test_rag_estimator_keeps_explicit_points_and_estimates_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("MOCK_RAG", "1")
+    config = RAGConfig(persist_dir=tmp_path / "rag-index", confluence_dir=tmp_path / "conf")
+    rag = RAGEstimator(config=config)
     history = [
         {"id": "T1", "summary": "Parallelize preprocessing with Dask", "description": "fan-out", "storyPoints": 5},
         {"id": "T2", "summary": "Drift detection with Slack", "description": "alert", "storyPoints": 3},
@@ -25,9 +27,17 @@ def test_rag_estimator_keeps_explicit_points_and_estimates_missing(tmp_path):
         ),
     ]
     result = ExtractionResult(tasks=tasks)
-    updated, stats = rag.enrich(transcript="", result=result, history_tasks=history)
+    updated, stats = rag.enrich(
+        transcript="We need to add drift alerting and parallelize preprocessing.",
+        result=result,
+        history_tasks=history,
+        meeting_id="m-123",
+        project_key="DATA",
+    )
 
     assert updated.tasks[0].story_points == 8  # explicit not overwritten
     assert updated.tasks[1].story_points is not None
-    assert stats["kept"] == 1
-    assert stats["estimated"] == 1
+    assert "rag-estimated" in updated.tasks[1].labels
+    assert stats["story_points_kept"] == 1
+    assert stats["story_points_estimated"] == 1
+    assert stats["ingested_history"] == 2

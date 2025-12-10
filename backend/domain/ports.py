@@ -147,6 +147,7 @@ class TelemetryPort(Protocol):
             result: ExtractionResult,
             meeting_date: str,
             transcript_blob_uri: str | None,
+            telemetry: dict[str, Any] | None = None,
     ) -> None:
         """Emit telemetry for an extraction workflow."""
 

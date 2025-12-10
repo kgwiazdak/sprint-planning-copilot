@@ -61,6 +61,8 @@ class ExtractMeetingUseCase:
         self._telemetry = telemetry
         self._rag = rag_estimator
         self._worker_actor = os.getenv("MEETING_WORKER_ACTOR", "meeting-worker")
+        self._last_extraction_metrics: dict = {}
+        self._last_rag_stats: dict = {}
         if audio_extensions is not None:
             self._audio_extensions = audio_extensions
         elif transcription is not None:
@@ -94,6 +96,8 @@ class ExtractMeetingUseCase:
             owner_id: str | None = None,
             project_key: str | None = None,
     ) -> ExtractionResult:
+        self._last_extraction_metrics = {}
+        self._last_rag_stats = {}
         effective_owner = owner_id or None
         context_meeting_id = meeting_id or str(uuid.uuid4())
         if context_meeting_id:
@@ -179,8 +183,14 @@ class ExtractMeetingUseCase:
         raise ExtractionError("Unsupported file type. Upload .txt, .json, or supported audio.", status_code=400)
 
     async def _extract(self, transcript: str) -> ExtractionResult:
+        start = asyncio.get_event_loop().time()
         try:
-            return await asyncio.to_thread(self._extractor.extract, transcript)
+            result = await asyncio.to_thread(self._extractor.extract, transcript)
+            end = asyncio.get_event_loop().time()
+            timings = getattr(self._extractor, "last_timings", {}) or {}
+            timings.setdefault("latency_ms_llm", (end - start) * 1000)
+            self._last_extraction_metrics = timings
+            return result
         except Exception as exc:  # pragma: no cover - defensive
             raise ExtractionError(f"Extraction failed: {exc}", status_code=500) from exc
 
@@ -200,18 +210,27 @@ class ExtractMeetingUseCase:
             history_tasks = self._meetings_repo.list_tasks(status="approved", owner_id=owner_id or "")  # type: ignore[arg-type]
         except Exception:
             history_tasks = []
-        updated, stats = await asyncio.to_thread(
-            self._rag.enrich,
-            transcript=transcript,
-            result=result,
-            history_tasks=history_tasks,
-        )
         try:
-            stats_path = Path(os.getenv("RAG_STATS_PATH", "data/rag_stats.json"))
-            write_stats({**stats, "meeting_id": ctx.meeting_id, "project_key": project_key}, stats_path)
+            updated, stats = await asyncio.to_thread(
+                self._rag.enrich,
+                transcript=transcript,
+                result=result,
+                history_tasks=history_tasks,
+                meeting_id=ctx.meeting_id,
+                project_key=project_key,
+                owner_id=owner_id,
+            )
+            self._last_rag_stats = stats
+            try:
+                stats_path = Path(os.getenv("RAG_STATS_PATH", "data/rag_stats.json"))
+                write_stats({**stats, "meeting_id": ctx.meeting_id, "project_key": project_key}, stats_path)
+            except Exception:
+                pass
+            return updated
         except Exception:
-            pass
-        return updated
+            # Never fail the pipeline due to RAG; log best-effort telemetry.
+            self._last_rag_stats = {"error": "rag_failed"}
+            return result
 
     async def _store(
             self,
@@ -260,6 +279,10 @@ class ExtractMeetingUseCase:
                 result=result,
                 meeting_date=meeting_date,
                 transcript_blob_uri=transcript_blob_uri,
+                telemetry={
+                    "extraction": self._last_extraction_metrics,
+                    "rag": self._last_rag_stats,
+                },
             )
 
         await asyncio.to_thread(_emit_telemetry)

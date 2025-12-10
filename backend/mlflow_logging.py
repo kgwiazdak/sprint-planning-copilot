@@ -68,6 +68,7 @@ LATENCY_ACCUMULATION_KEYS = {
     "latency_ms_normalization",
     "latency_ms_approval",
     "latency_ms_push",
+    "rag_retrieval_latency_ms",
 }
 SLO_LATENCY_MS = int(os.getenv("SLO_LATENCY_MS", "10000"))
 COST_BUDGET_USD = float(os.getenv("COST_BUDGET_USD", "10"))
@@ -326,6 +327,7 @@ def _build_phase_data(
     normalization_metrics = telemetry.get("normalization", {})
     approval_metrics = telemetry.get("approval", {})
     push_metrics = telemetry.get("push_to_jira", {})
+    rag_metrics = telemetry.get("rag", {})
 
     approval_metrics = {**approval_metrics, **approval_stats, **diff_stats.get("averages", {})}
 
@@ -367,7 +369,13 @@ def _build_phase_data(
         PhaseData(
             name="extraction",
             metrics={
-                "latency_ms_llm": float(extraction_metrics.get("latency_ms_llm", 0.0)),
+                "latency_ms_llm": float(
+                    extraction_metrics.get("latency_ms_llm", extraction_metrics.get("llm_ttl_ms", 0.0))
+                ),
+                "ttft_ms": float(extraction_metrics.get("llm_ttft_ms", extraction_metrics.get("ttft_ms", 0.0))),
+                "ttlt_ms": float(
+                    extraction_metrics.get("llm_ttl_ms", extraction_metrics.get("ttlt_ms", extraction_metrics.get("latency_ms_llm", 0.0)))
+                ),
                 "tokens_prompt": float(extraction_metrics.get("tokens_prompt", 0.0)),
                 "tokens_completion": float(extraction_metrics.get("tokens_completion", 0.0)),
                 "cost_usd": float(extraction_metrics.get("cost_usd", 0.0)),
@@ -381,6 +389,24 @@ def _build_phase_data(
             artifacts=[
                 ArtifactRecord("artifacts/extraction/raw.json", raw_payload, is_json=True),
                 ArtifactRecord("artifacts/extraction/prompt.txt", prompt_template, is_json=False, compressible=False),
+            ],
+        ),
+        PhaseData(
+            name="rag",
+            metrics={
+                "rag_retrieval_latency_ms": float(rag_metrics.get("latency_ms_retrieval", 0.0)),
+                "rag_story_points_estimated": float(rag_metrics.get("story_points_estimated", 0.0)),
+                "rag_story_points_kept": float(rag_metrics.get("story_points_kept", 0.0)),
+                "rag_ingested_history": float(rag_metrics.get("ingested_history", 0.0)),
+                "rag_ingested_transcript_chunks": float(rag_metrics.get("ingested_transcript_chunks", 0.0)),
+                "rag_seeded_confluence": float(rag_metrics.get("seeded_confluence", 0.0)),
+            },
+            params={
+                "rag_top_k": rag_metrics.get("top_k"),
+                "rag_rerank_top_k": rag_metrics.get("rerank_top_k"),
+            },
+            artifacts=[
+                ArtifactRecord("artifacts/rag/retrievals.json", rag_metrics.get("retrievals", []), is_json=True),
             ],
         ),
         PhaseData(
