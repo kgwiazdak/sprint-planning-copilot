@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, Protocol, runtime_checkable
+from typing import Any, Iterable, Mapping, Protocol, runtime_checkable
 
 from backend.domain.entities import MeetingImportJob
 from backend.schemas import ExtractionResult
@@ -25,6 +25,9 @@ class BlobStoragePort(Protocol):
 @runtime_checkable
 class TranscriptionPort(Protocol):
     SUPPORTED_AUDIO_EXTENSIONS: tuple[str, ...]
+
+    def set_owner(self, owner_id: str | None) -> None:
+        """Optional hook to scope any voice diarization assets to a specific owner."""
 
     def transcribe(self, content: bytes, filename: str) -> str:
         """Return a transcript for the provided audio payload."""
@@ -148,6 +151,7 @@ class TelemetryPort(Protocol):
             meeting_date: str,
             transcript_blob_uri: str | None,
             telemetry: dict[str, Any] | None = None,
+            diarization_payload: Mapping[str, Any] | None = None,
     ) -> None:
         """Emit telemetry for an extraction workflow."""
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import fnmatch
 import logging
 import os
 from functools import lru_cache
 from pathlib import Path
 
-from backend.application.services.voice_profiles import VoiceSamplesSyncService, register_voice_samples
+from backend.application.services.voice_profiles import VoiceSamplesSyncService
 from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase
 from backend.application.services.rag_estimator import RAGEstimator
 from backend.domain.ports import TranscriptionPort
@@ -23,6 +24,7 @@ from backend.infrastructure.storage.blob import BlobStorageService
 from backend.infrastructure.telemetry.mlflow_adapter import MLflowTelemetryAdapter
 from backend.infrastructure.transcription.azure_conversation import (
     AzureConversationTranscriber,
+    IntroClip,
     SUPPORTED_AUDIO_EXTENSIONS,
 )
 from backend.settings import get_settings
@@ -49,6 +51,9 @@ class MockTranscriber(TranscriptionPort):
             "and follow-ups on blockers and demo prep."
         )
         self._transcript = transcript.strip() if transcript else default
+
+    def set_owner(self, owner_id: str | None) -> None:
+        return None
 
     def transcribe(self, content: bytes, filename: str) -> str:
         return self._transcript
@@ -84,6 +89,7 @@ def get_transcriber() -> TranscriptionPort | None:
     if not cfg.key or not cfg.region:
         return None
     intro_dir = _ensure_intro_samples_dir()
+    intro_loader = _build_intro_loader()
     if get_settings().mock_audio.enabled:
         try:
             get_mock_audio_path()
@@ -95,7 +101,58 @@ def get_transcriber() -> TranscriptionPort | None:
         language=cfg.language,
         sample_rate=cfg.sample_rate,
         intro_audio_dir=intro_dir,
+        intro_loader=intro_loader,
     )
+
+
+def _build_intro_loader():
+    storage = get_worker_blob_storage()
+    repo = get_meetings_repository()
+    if not storage:
+        return None
+    pattern = os.getenv("INTRO_AUDIO_PATTERN", "intro_*.*")
+    prefix = pattern.split("*", 1)[0]
+    container_prefix = f"{storage._container_client.url}/"
+
+    def _blob_name(path: str) -> str | None:
+        if not path:
+            return None
+        if path.startswith(container_prefix):
+            return path[len(container_prefix):].split("?", 1)[0]
+        if "://" not in path:
+            return path
+        return None
+
+    def _load(owner_id: str | None) -> list[IntroClip]:
+        clips: list[IntroClip] = []
+        if not owner_id:
+            return clips
+        try:
+            users = repo.list_users(owner_id=owner_id)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to list users for owner %s: %s", owner_id, exc)
+            return clips
+        for user in users:
+            blob_name = _blob_name(user.get("voiceSamplePath"))
+            if not blob_name:
+                continue
+            filename = Path(blob_name).name
+            if not fnmatch.fnmatch(filename, pattern):
+                continue
+            try:
+                payload = storage.download_blob_by_name_sync(blob_name)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to stream intro sample %s: %s", blob_name, exc)
+                continue
+            role = VoiceSamplesSyncService._display_name_from_blob(filename) or AzureConversationTranscriber._role_from_filename(Path(filename))
+            try:
+                source_url = storage.build_blob_url(blob_name)
+            except Exception:
+                source_url = blob_name
+            clips.append(IntroClip(role=role, content=payload, source=source_url))
+        return clips
+
+    return _load
 
 
 @lru_cache(maxsize=1)
@@ -229,19 +286,6 @@ def _ensure_intro_samples_dir() -> Path:
     cfg = get_settings().blob_storage
     target = Path(os.getenv("INTRO_AUDIO_DIR", "data/voices"))
     target.mkdir(parents=True, exist_ok=True)
-    if not cfg.connection_string or not cfg.container_workers_name:
-        return target
-    try:
-        syncer = VoiceSamplesSyncService(
-            connection_string=cfg.connection_string,
-            container_name=cfg.container_workers_name,
-            target_dir=target,
-        )
-        samples = syncer.sync()
-        if samples:
-            register_voice_samples(get_meetings_repository(), samples, owner_id="system")
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.warning("Failed to synchronize intro samples: %s", exc)
     return target
 
 

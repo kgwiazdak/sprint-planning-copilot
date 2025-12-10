@@ -1,13 +1,24 @@
 from __future__ import annotations
 
 import azure.cognitiveservices.speech as speechsdk
+import logging
 import os
 import threading
 from azure.cognitiveservices.speech import transcription as speech_transcription
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, Iterable, List
 
 from backend.infrastructure.audio import normalizer
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class IntroClip:
+    role: str
+    content: bytes
+    source: str | None = None
 
 
 class AzureConversationTranscriber:
@@ -30,6 +41,7 @@ class AzureConversationTranscriber:
             intro_silence_ms: int = 300,
             transcription_timeout: int | None = None,
             stop_timeout: int | None = None,
+            intro_loader: Callable[[str | None], Iterable[IntroClip]] | None = None,
     ) -> None:
         if not key or not region:
             raise ValueError("Azure Speech key and region must be configured")
@@ -48,6 +60,9 @@ class AzureConversationTranscriber:
         self._stop_timeout = stop_timeout if stop_timeout is not None else int(
             os.getenv("TRANSCRIPTION_STOP_TIMEOUT_SECONDS", str(self.DEFAULT_STOP_TIMEOUT_SECONDS))
         )
+        self._intro_loader = intro_loader
+        self._current_owner: str | None = None
+        self._last_intro_context: dict | None = None
 
         self._speech_config = self._build_speech_config()
 
@@ -72,22 +87,63 @@ class AzureConversationTranscriber:
         audio_config = speechsdk.audio.AudioConfig(stream=push_stream)
         return audio_config, feed_audio
 
-    def _load_intro_chunks(self, sample_rate: int, sample_width: int, channels: int):
-        if not self._intro_dir.exists():
+    def _load_intro_chunks(self, sample_rate: int, sample_width: int, channels: int, owner_id: str | None):
+        clips: list[IntroClip] = []
+        if self._intro_loader and owner_id:
+            try:
+                clips.extend(list(self._intro_loader(owner_id)))
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to load intro clips from blob storage: %s", exc)
+
+        if not clips and self._intro_dir.exists():
+            for path in sorted(self._intro_dir.glob(self._intro_pattern)):
+                if not path.is_file():
+                    continue
+                try:
+                    clips.append(
+                        IntroClip(
+                            role=self._role_from_filename(path),
+                            content=path.read_bytes(),
+                            source=str(path),
+                        )
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.warning("Failed to read intro sample %s: %s", path, exc)
+
+        if not clips:
+            self._last_intro_context = {"owner_id": owner_id, "clips": [], "count": 0}
             return []
 
+        normalized = self._normalize_intro_clips(clips, sample_rate, sample_width, channels)
+        self._last_intro_context = {
+            "owner_id": owner_id,
+            "clips": [
+                {"role": clip.role, "source": getattr(clip, "source", None)}
+                for clip in clips
+            ],
+            "count": len(normalized),
+        }
+        return normalized
+
+    def _normalize_intro_clips(
+            self,
+            clips: Iterable[IntroClip],
+            sample_rate: int,
+            sample_width: int,
+            channels: int,
+    ):
         chunks = []
-        for path in sorted(self._intro_dir.glob(self._intro_pattern)):
-            if not path.is_file():
-                continue
-            role = self._role_from_filename(path)
-            wav_bytes = normalizer.convert_to_standard_wav(
-                path.read_bytes(), sample_rate=sample_rate, channels=channels
-            )
-            frames, num_frames, sr, sw, ch = normalizer.wav_payload(wav_bytes)
-            if (sr, sw, ch) != (sample_rate, sample_width, channels):
-                raise ValueError(f"Intro sample {path.name} has incompatible audio format")
-            chunks.append({"role": role, "frames": frames, "num_frames": num_frames})
+        for clip in clips:
+            try:
+                wav_bytes = normalizer.convert_to_standard_wav(
+                    clip.content, sample_rate=sample_rate, channels=channels
+                )
+                frames, num_frames, sr, sw, ch = normalizer.wav_payload(wav_bytes)
+                if (sr, sw, ch) != (sample_rate, sample_width, channels):
+                    raise ValueError(f"Intro sample {clip.role} has incompatible audio format")
+                chunks.append({"role": clip.role, "frames": frames, "num_frames": num_frames})
+            except Exception as exc:
+                logger.warning("Skipping intro clip %s: %s", getattr(clip, "role", "unknown"), exc)
         return chunks
 
     @staticmethod
@@ -114,7 +170,7 @@ class AzureConversationTranscriber:
             sample_width: int,
             channels: int,
     ):
-        intros = self._load_intro_chunks(sample_rate, sample_width, channels)
+        intros = self._load_intro_chunks(sample_rate, sample_width, channels, self._current_owner)
         if not intros:
             wav_bytes = normalizer.build_wav([meeting_frames], sample_rate, sample_width, channels)
             return wav_bytes, [], 0
@@ -141,6 +197,13 @@ class AzureConversationTranscriber:
 
         combined_wav = normalizer.build_wav(frames_sequence, sample_rate, sample_width, channels)
         return combined_wav, boundaries, meeting_start_tick
+
+    def set_owner(self, owner_id: str | None) -> None:
+        self._current_owner = owner_id
+        self._last_intro_context = None
+
+    def get_last_intro_context(self) -> dict | None:
+        return self._last_intro_context
 
     def transcribe(self, content: bytes, filename: str) -> str:
         if not filename.lower().endswith(self.SUPPORTED_AUDIO_EXTENSIONS):

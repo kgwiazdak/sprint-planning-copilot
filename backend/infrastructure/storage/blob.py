@@ -136,6 +136,15 @@ class BlobStorageService:
     def download_blob_by_name_sync(self, blob_name: str) -> bytes:
         return self._download_bytes(blob_name)
 
+    def list_blob_names(self, prefix: str | None = None) -> list[str]:
+        try:
+            return [blob.name for blob in self._container_client.list_blobs(name_starts_with=prefix)]
+        except AzureError as exc:
+            raise BlobStorageUploadError("Listing blobs failed") from exc
+
+    def build_blob_url(self, blob_name: str) -> str:
+        return f"{self._container_client.url}/{blob_name}"
+
     def _download_bytes(self, blob_name: str) -> bytes:
         blob_client = self._container_client.get_blob_client(blob=blob_name)
         try:

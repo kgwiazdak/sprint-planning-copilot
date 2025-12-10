@@ -63,6 +63,7 @@ class ExtractMeetingUseCase:
         self._worker_actor = os.getenv("MEETING_WORKER_ACTOR", "meeting-worker")
         self._last_extraction_metrics: dict = {}
         self._last_rag_stats: dict = {}
+        self._last_diarization_payload: dict = {}
         if audio_extensions is not None:
             self._audio_extensions = audio_extensions
         elif transcription is not None:
@@ -126,7 +127,7 @@ class ExtractMeetingUseCase:
             )
 
             transcript_blob_uri = await self._persist_original_file(context)
-            transcript = await self._resolve_transcript(context)
+            transcript = await self._resolve_transcript(context, owner_id=effective_owner)
             result = await self._extract(transcript)
             result = await self._apply_rag(context, transcript, result, project_key=project_key, owner_id=effective_owner)
             run_meeting_id, run_id = await self._store(
@@ -168,7 +169,9 @@ class ExtractMeetingUseCase:
             content_type=ctx.content_type,
         )
 
-    async def _resolve_transcript(self, ctx: IngestedFile) -> str:
+    async def _resolve_transcript(self, ctx: IngestedFile, *, owner_id: str | None) -> str:
+        # Reset diarization context for each resolve
+        self._last_diarization_payload = {}
         name_lower = ctx.filename.lower()
         if name_lower.endswith((".txt", ".json")):
             return ctx.payload.decode("utf-8", errors="ignore")
@@ -176,7 +179,13 @@ class ExtractMeetingUseCase:
         transcription = self._transcription
         audio_exts = self._audio_extensions
         if transcription and audio_exts and name_lower.endswith(audio_exts):
-            return await asyncio.to_thread(transcription.transcribe, ctx.payload, name_lower)
+            try:
+                transcription.set_owner(owner_id)
+            except Exception:
+                pass
+            text = await asyncio.to_thread(transcription.transcribe, ctx.payload, name_lower)
+            self._last_diarization_payload = self._build_diarization_payload(transcription, owner_id)
+            return text
         if audio_exts and name_lower.endswith(audio_exts):
             raise ExtractionError("Transcription service is not configured.", status_code=500)
 
@@ -283,6 +292,29 @@ class ExtractMeetingUseCase:
                     "extraction": self._last_extraction_metrics,
                     "rag": self._last_rag_stats,
                 },
+                diarization_payload=self._last_diarization_payload or {},
             )
 
         await asyncio.to_thread(_emit_telemetry)
+
+    @staticmethod
+    def _build_diarization_payload(transcription: TranscriptionPort, owner_id: str | None) -> dict:
+        context = {}
+        try:
+            context = transcription.get_last_intro_context()  # type: ignore[attr-defined]
+        except Exception:
+            context = {}
+        if not isinstance(context, dict):
+            context = {}
+        clips = context.get("clips")
+        if not isinstance(clips, list):
+            clips = []
+        count = context.get("count")
+        if not isinstance(count, int):
+            count = len(clips)
+        payload = {
+            "owner_id": owner_id,
+            "intros": clips,
+            "intro_count": count,
+        }
+        return payload

@@ -319,10 +319,6 @@ async def upload_voice_sample(
     if not ext or len(ext) > 5:
         ext = ".mp3"
     filename = f"intro_{slug}{ext}"
-    voices_dir = Path(os.getenv("INTRO_AUDIO_DIR", "data/voices"))
-    voices_dir.mkdir(parents=True, exist_ok=True)
-    local_path = voices_dir / filename
-    local_path.write_bytes(payload)
     blob_url = await worker_storage.upload_blob(
         blob_name=filename,
         content=payload,
@@ -330,11 +326,11 @@ async def upload_voice_sample(
     )
     try:
         if userId:
-            repo.update_user_voice_sample(userId, displayName, str(local_path), owner_id=user.subject)
+            repo.update_user_voice_sample(userId, displayName, blob_url, owner_id=user.subject)
             final_user_id = userId
         else:
             final_user_id = repo.register_voice_profile(
-                display_name=displayName, voice_sample_path=str(local_path), owner_id=user.subject
+                display_name=displayName, voice_sample_path=blob_url, owner_id=user.subject
             )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -342,7 +338,7 @@ async def upload_voice_sample(
     return VoiceUploadResponse(
         userId=final_user_id,
         displayName=user_row["displayName"] if user_row else displayName,
-        voiceSamplePath=str(local_path),
+        voiceSamplePath=blob_url,
         blobUrl=blob_url,
     )
 
