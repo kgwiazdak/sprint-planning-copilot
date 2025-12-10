@@ -4,9 +4,10 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 
-from backend.container import get_meeting_queue_worker
+# Load environment before importing container to avoid caching empty settings.
+load_dotenv(dotenv_path=".env")
 
-load_dotenv()
+from backend.container import get_meeting_queue_worker
 
 logger = logging.getLogger(__name__)
 

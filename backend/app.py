@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 # Sprint Planning Copilot API
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+# Ensure .env is loaded before any container/settings singletons are constructed.
+load_dotenv(dotenv_path=".env")
 
 from backend.presentation.http.ui_router import public_router, router as ui_router
 

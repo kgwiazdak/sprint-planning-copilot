@@ -1,4 +1,10 @@
-import {type QueryKey, useMutation, useQuery, useQueryClient,} from '@tanstack/react-query';
+import {
+    type QueryKey,
+    type UseQueryOptions,
+    useMutation,
+    useQuery,
+    useQueryClient,
+} from '@tanstack/react-query';
 import {apiClient} from './client';
 import {queryKeys} from './queryKeys';
 import type {JiraProject, Meeting, Task, User} from '../types';
@@ -38,46 +44,61 @@ const fetchJiraProjects = async () => {
 };
 
 export const useMeetings = () =>
-    useQuery({
+    useQuery<Meeting[]>({
         queryKey: queryKeys.meetings(),
         queryFn: fetchMeetings,
+        staleTime: 0,
+        refetchOnMount: 'always',
+        refetchOnReconnect: 'always',
+        refetchOnWindowFocus: true,
     });
 
 export const useMeeting = (id: string) =>
-    useQuery({
+    useQuery<Meeting>({
         queryKey: queryKeys.meeting(id),
         queryFn: () => apiClient.get<Meeting>(`/meetings/${id}`).then((res) => res.data),
         enabled: Boolean(id),
+        // Poll while the meeting is in flight; stop after completion/failure.
+        refetchInterval: (query) => {
+            const meeting = query.state.data as Meeting | undefined;
+            return meeting && ['queued', 'processing'].includes(meeting.status) ? 2000 : false;
+        },
+        refetchIntervalInBackground: true,
+        refetchOnWindowFocus: true,
     });
 
-export const useMeetingTasks = (meetingId: string) =>
-    useQuery({
+export const useMeetingTasks = (
+    meetingId: string,
+    options?: Pick<UseQueryOptions<Task[]>, 'refetchInterval' | 'refetchIntervalInBackground'>,
+) =>
+    useQuery<Task[]>({
         queryKey: queryKeys.tasks(meetingId),
         queryFn: () => fetchMeetingTasks(meetingId),
         enabled: Boolean(meetingId),
+        ...options,
     });
 
 export const useTask = (taskId: string) =>
-    useQuery({
+    useQuery<Task>({
         queryKey: queryKeys.task(taskId),
         queryFn: () => fetchTask(taskId),
         enabled: Boolean(taskId),
     });
 
 export const useReviewTasks = () =>
-    useQuery({
+    useQuery<Task[]>({
         queryKey: queryKeys.reviewTasks(),
         queryFn: fetchReviewTasks,
     });
 
 export const useUsers = () =>
-    useQuery({
+    useQuery<User[]>({
         queryKey: queryKeys.users(),
         queryFn: fetchUsers,
     });
 
 export const useJiraProjects = () =>
-    useQuery({
+    useQuery<JiraProject[]>({
         queryKey: queryKeys.jiraProjects(),
         queryFn: fetchJiraProjects,
     });

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from backend.application.services.voice_profiles import VoiceSamplesSyncService, register_voice_samples
 from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase
+from backend.application.services.rag_estimator import RAGEstimator
 from backend.domain.ports import TranscriptionPort
 from backend.infrastructure.jira import JiraClient
 from backend.infrastructure.llm.task_extractor import LLMExtractor
@@ -135,12 +136,14 @@ def get_extract_use_case() -> ExtractMeetingUseCase:
     repo = get_meetings_repository()
     telemetry = get_telemetry()
     extractor = get_extractor()
+    rag = RAGEstimator()
     return ExtractMeetingUseCase(
         blob_storage=blob,
         transcription=transcription,
         extractor=extractor,
         meetings_repo=repo,
         telemetry=telemetry,
+        rag_estimator=rag,
         audio_extensions=SUPPORTED_AUDIO_EXTENSIONS,
     )
 
@@ -148,6 +151,13 @@ def get_extract_use_case() -> ExtractMeetingUseCase:
 @lru_cache(maxsize=1)
 def get_meeting_queue():
     settings = get_settings()
+    profile = getattr(settings, "profile", "prod")
+    # In dev we prefer the in-process background queue unless explicitly forced to Azure.
+    azure_queue_forced = os.getenv("ENABLE_AZURE_QUEUE", "").lower() in {"1", "true", "yes", "on"}
+    if profile == "dev" and not azure_queue_forced:
+        logger.info("Using in-process background queue (dev profile, ENABLE_AZURE_QUEUE not set).")
+        use_case = get_extract_use_case()
+        return BackgroundMeetingImportQueue(use_case.process_job)
     queue_cfg = getattr(settings, "queue", None)
     connection_string = None
     queue_name = None
@@ -174,6 +184,11 @@ def get_meeting_queue():
 @lru_cache(maxsize=1)
 def get_meeting_queue_worker() -> AzureQueueWorker | None:
     settings = get_settings()
+    profile = getattr(settings, "profile", "prod")
+    azure_queue_forced = os.getenv("ENABLE_AZURE_QUEUE", "").lower() in {"1", "true", "yes", "on"}
+    if profile == "dev" and not azure_queue_forced:
+        # When using in-process queue in dev, there is no separate worker.
+        return None
     queue_cfg = getattr(settings, "queue", None)
     if not queue_cfg:
         return None

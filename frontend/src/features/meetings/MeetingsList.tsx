@@ -37,7 +37,12 @@ import {PageHeader} from '../../components/PageHeader';
 
 export const MeetingsList = () => {
     const navigate = useNavigate();
-    const {data: meetings = [], isLoading, isError, refetch} = useMeetings();
+    const {
+        data: meetings = [],
+        isLoading,
+        isError,
+        refetch,
+    } = useMeetings();
     const deleteMeeting = useDeleteMeeting();
     const updateMeeting = useUpdateMeeting();
     const {enqueueSnackbar} = useSnackbar();
@@ -72,20 +77,6 @@ export const MeetingsList = () => {
         }
     };
 
-    useEffect(() => {
-        const hasInFlight = meetings.some((meeting) =>
-            ['queued', 'processing'].includes(meeting.status),
-        );
-        if (!hasInFlight) {
-            return;
-        }
-        // Poll every 2 seconds for faster status updates when jobs are in flight
-        const interval = window.setInterval(() => {
-            refetch();
-        }, 2000);
-        return () => window.clearInterval(interval);
-    }, [meetings, refetch]);
-
     const getStatusColor = (status: MeetingStatus) => {
         switch (status) {
             case 'completed':
@@ -107,6 +98,21 @@ export const MeetingsList = () => {
             ),
         [meetings],
     );
+
+    const hasActiveMeeting = useMemo(
+        () => meetings.some((meeting) => ['queued', 'processing'].includes(meeting.status)),
+        [meetings],
+    );
+
+    useEffect(() => {
+        if (!hasActiveMeeting) return;
+        // Make sure the list keeps updating while imports run.
+        void refetch({cancelRefetch: false});
+        const intervalId = window.setInterval(() => {
+            void refetch({cancelRefetch: false});
+        }, 2000);
+        return () => window.clearInterval(intervalId);
+    }, [hasActiveMeeting, refetch]);
 
     const overviewStats = useMemo(() => {
         const active = meetings.filter((meeting) =>

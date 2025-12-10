@@ -18,6 +18,7 @@ from backend.domain.ports import (
 )
 from backend.domain.status import MeetingStatus
 from backend.schemas import ExtractionResult
+from backend.application.services.rag_estimator import RAGEstimator, write_stats
 
 
 class ExtractionError(RuntimeError):
@@ -50,6 +51,7 @@ class ExtractMeetingUseCase:
             extractor: ExtractionPort,
             meetings_repo: MeetingsRepositoryPort,
             telemetry: TelemetryPort | None,
+            rag_estimator: RAGEstimator | None = None,
             audio_extensions: tuple[str, ...] | None = None,
     ) -> None:
         self._blob_storage = blob_storage
@@ -57,6 +59,7 @@ class ExtractMeetingUseCase:
         self._extractor = extractor
         self._meetings_repo = meetings_repo
         self._telemetry = telemetry
+        self._rag = rag_estimator
         self._worker_actor = os.getenv("MEETING_WORKER_ACTOR", "meeting-worker")
         if audio_extensions is not None:
             self._audio_extensions = audio_extensions
@@ -121,6 +124,7 @@ class ExtractMeetingUseCase:
             transcript_blob_uri = await self._persist_original_file(context)
             transcript = await self._resolve_transcript(context)
             result = await self._extract(transcript)
+            result = await self._apply_rag(context, transcript, result, project_key=project_key, owner_id=effective_owner)
             run_meeting_id, run_id = await self._store(
                 context,
                 transcript,
@@ -179,6 +183,35 @@ class ExtractMeetingUseCase:
             return await asyncio.to_thread(self._extractor.extract, transcript)
         except Exception as exc:  # pragma: no cover - defensive
             raise ExtractionError(f"Extraction failed: {exc}", status_code=500) from exc
+
+    async def _apply_rag(
+            self,
+            ctx: IngestedFile,
+            transcript: str,
+            result: ExtractionResult,
+            *,
+            project_key: str | None,
+            owner_id: str | None,
+    ) -> ExtractionResult:
+        if not self._rag:
+            return result
+        history_tasks = []
+        try:
+            history_tasks = self._meetings_repo.list_tasks(status="approved", owner_id=owner_id or "")  # type: ignore[arg-type]
+        except Exception:
+            history_tasks = []
+        updated, stats = await asyncio.to_thread(
+            self._rag.enrich,
+            transcript=transcript,
+            result=result,
+            history_tasks=history_tasks,
+        )
+        try:
+            stats_path = Path(os.getenv("RAG_STATS_PATH", "data/rag_stats.json"))
+            write_stats({**stats, "meeting_id": ctx.meeting_id, "project_key": project_key}, stats_path)
+        except Exception:
+            pass
+        return updated
 
     async def _store(
             self,

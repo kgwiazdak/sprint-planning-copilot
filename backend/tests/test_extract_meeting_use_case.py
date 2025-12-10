@@ -38,6 +38,7 @@ class DummyRepository:
             title: str | None = None,
             started_at: str | None = None,
             blob_url: str | None = None,
+            project_key: str | None = None,
             owner_id: str,
     ) -> tuple[str, str]:
         self.captured = {
@@ -49,8 +50,12 @@ class DummyRepository:
             "tasks": len(result_model.tasks),
             "blob_url": blob_url,
             "owner_id": owner_id,
+            "project_key": project_key,
         }
         return meeting_id or "meeting-id", "run-id"
+
+    def list_tasks(self, *, meeting_id: str | None = None, status: str | None = None, owner_id: str = ""):
+        return []
 
 
 class DummyBlobStorage:

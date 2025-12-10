@@ -45,13 +45,18 @@ const MetadataItem = ({label, value}: MetadataItemProps) => (
 export const MeetingTasksPage = () => {
     const {id = ''} = useParams();
     const {data: meeting} = useMeeting(id);
+    const meetingStatus = meeting?.status;
     const {
         data: tasks = [],
         isLoading,
         isError,
         refetch,
         isFetching,
-    } = useMeetingTasks(id);
+    } = useMeetingTasks(id, {
+        refetchInterval:
+            meetingStatus && ['queued', 'processing'].includes(meetingStatus) ? 2000 : false,
+        refetchIntervalInBackground: true,
+    });
     const {data: users = []} = useUsers();
     const approveTasks = useApproveTasks();
     const rejectTasks = useRejectTasks();
