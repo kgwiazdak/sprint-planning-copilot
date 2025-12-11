@@ -260,6 +260,20 @@ class RAGEstimator:
         return round(sum(candidates) / len(candidates))
 
     @staticmethod
+    def _average_history_points(history_tasks: Iterable[Mapping[str, Any]]) -> int | None:
+        candidates: list[int] = []
+        for task in history_tasks:
+            if task.get("storyPoints") is None:
+                continue
+            try:
+                candidates.append(int(task["storyPoints"]))
+            except (TypeError, ValueError):
+                continue
+        if not candidates:
+            return None
+        return round(sum(candidates) / len(candidates))
+
+    @staticmethod
     def _to_context(node: NodeWithScore) -> dict[str, Any]:
         metadata = dict(node.node.metadata)
         metadata.pop("text", None)
@@ -304,6 +318,8 @@ class RAGEstimator:
             query = self._task_query(task)
             nodes = self._retrieve(query)
             est_points = self._estimate_points_from_nodes(nodes)
+            if est_points is None and task.story_points is None and self._config.use_mock_embeddings:
+                est_points = self._average_history_points(history_tasks or [])
             if task.story_points is None and est_points is not None:
                 task.story_points = est_points
                 stats["story_points_estimated"] += 1

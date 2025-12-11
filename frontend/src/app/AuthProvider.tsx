@@ -156,7 +156,14 @@ const SignInGate = ({children, scopes}: GateProps) => {
         setAuthTokenProvider(null);
     }, []);
 
-    const toSession = useCallback((tokenResponse: any): AtlassianSession => {
+    type TokenResponse = {
+        access_token: string;
+        refresh_token?: string;
+        scope?: string;
+        expires_in?: number;
+    };
+
+    const toSession = useCallback((tokenResponse: TokenResponse): AtlassianSession => {
         const expiresIn = typeof tokenResponse.expires_in === 'number' ? tokenResponse.expires_in : 3600;
         return {
             accessToken: tokenResponse.access_token,

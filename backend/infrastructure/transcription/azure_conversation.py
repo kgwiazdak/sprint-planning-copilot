@@ -54,8 +54,10 @@ class AzureConversationTranscriber:
         self._intro_dir = Path(intro_audio_dir or os.getenv("INTRO_AUDIO_DIR", "data/voices"))
         self._intro_pattern = intro_pattern or os.getenv("INTRO_AUDIO_PATTERN", "intro_*.*")
         self._intro_silence_ms = intro_silence_ms or int(os.getenv("INTRO_SILENCE_MS", "300"))
-        self._transcription_timeout = transcription_timeout if transcription_timeout else int(
-            os.getenv("TRANSCRIPTION_TIMEOUT_SECONDS", str(self.DEFAULT_TRANSCRIPTION_TIMEOUT_SECONDS))
+        self._transcription_timeout = (
+            transcription_timeout
+            if transcription_timeout is not None
+            else int(os.getenv("TRANSCRIPTION_TIMEOUT_SECONDS", str(self.DEFAULT_TRANSCRIPTION_TIMEOUT_SECONDS)))
         )
         self._stop_timeout = stop_timeout if stop_timeout is not None else int(
             os.getenv("TRANSCRIPTION_STOP_TIMEOUT_SECONDS", str(self.DEFAULT_STOP_TIMEOUT_SECONDS))
