@@ -465,12 +465,16 @@ The repository includes GitHub Actions workflows:
    - Deploys to Azure Container Apps
    - Runs only after tests pass
 
-3. **Deploy Frontend** (`.github/workflows/deploy-frontend.yml`)
-   - Builds production frontend with Vite
-   - Deploys to Azure Container Apps
-   - Runs only after tests pass
-
-### Required GitHub Secrets
+  3. **Deploy Frontend** (`.github/workflows/deploy-frontend.yml`)
+     - Builds production frontend with Vite
+     - Deploys to Azure Container Apps
+     - Runs only after tests pass
+ 
+  ### Secret Management (Azure Key Vault)
+ 
+  Use `scripts/bootstrap_keyvault.sh` to create a Key Vault, push every non-empty value from your `.env`, and wire the `jira-api` and `jira-worker` Container Apps to consume secrets via Key Vault references. See `AZURE_KEYVAULT_SETUP.md` for the step-by-step bootstrap.
+ 
+  ### Required GitHub Secrets
 
 Set these in **Settings → Secrets and variables → Actions**:
 
