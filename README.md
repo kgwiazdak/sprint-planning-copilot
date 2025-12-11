@@ -172,6 +172,8 @@ VITE_ATLASSIAN_REDIRECT_URI=http://localhost:4173
 VITE_ATLASSIAN_SCOPES=read:confluence-content.all read:jira-work offline_access
 ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
 ATLASSIAN_REQUIRE_AUTH=true
+
+> 💡 Atlassian enforces an exact match on the callback URL, so configure your OAuth app to use the same canonical value you set in `VITE_ATLASSIAN_REDIRECT_URI` (the client normalized it before redirecting, so trailing slashes matter—e.g., `https://jiracopilot.com/`).
 ```
 
 #### **Development Features**
@@ -615,6 +617,8 @@ ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
 ATLASSIAN_CLIENT_SECRET=your-atlassian-client-secret
 ATLASSIAN_REDIRECT_URI=https://your-frontend.example.com
 ATLASSIAN_REQUIRE_AUTH=true
+
+> 💡 The Atlassian app callback must exactly match the normalized `VITE_ATLASSIAN_REDIRECT_URI` you register (our client will always send the canonical form, so trailing slashes matter—e.g., `https://your-frontend.example.com/`).
 
 # MLflow
 MLFLOW_TRACKING_URI=https://mlflow.yourcompany.com

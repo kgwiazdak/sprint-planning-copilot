@@ -21,7 +21,38 @@ const stateKey = 'atlassian-oauth-state';
 const verifierKey = 'atlassian-oauth-verifier';
 const accessibleResourcesUrl = 'https://api.atlassian.com/oauth/token/accessible-resources';
 const clientId = import.meta.env.VITE_ATLASSIAN_CLIENT_ID;
-const redirectUri = import.meta.env.VITE_ATLASSIAN_REDIRECT_URI ?? window.location.origin;
+
+const canonicalizeRedirectUri = (value?: string) => {
+    if (!value) {
+        return undefined;
+    }
+    try {
+        return new URL(value).toString();
+    } catch {
+        return value;
+    }
+};
+
+const resolveRedirectUri = () => {
+    const envValue = (import.meta.env.VITE_ATLASSIAN_REDIRECT_URI ?? '').trim();
+    const baseValue =
+        envValue ||
+        (typeof window !== 'undefined'
+            ? window.location.origin
+            : undefined);
+    if (!baseValue) {
+        return undefined;
+    }
+    return canonicalizeRedirectUri(baseValue);
+};
+
+const redirectUri = resolveRedirectUri();
+const ensureRedirectUri = () => {
+    if (!redirectUri) {
+        throw new Error('Atlassian redirect URI is not configured.');
+    }
+    return redirectUri;
+};
 const requestedScopes = (import.meta.env.VITE_ATLASSIAN_SCOPES ??
     'read:confluence-space.summary read:confluence-content.all read:jira-work write:jira-work manage:jira-project manage:jira-configuration'
 ).split(/[\s,]+/).filter(Boolean);
@@ -31,7 +62,7 @@ const apiBase = (() => {
 })();
 const tokenExchangeUrl = `${apiBase}/auth/atlassian/token`;
 
-const atlassianAuthEnabled = Boolean(clientId);
+const atlassianAuthEnabled = Boolean(clientId && redirectUri);
 
 const randomString = (length = 64) => {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
@@ -131,6 +162,7 @@ const SignInGate = ({children, scopes}: GateProps) => {
     const [ready, setReady] = useState(!atlassianAuthEnabled);
 
     const buildAuthUrl = useCallback(async () => {
+        const callbackUri = ensureRedirectUri();
         const verifier = randomString(64);
         const challenge = await buildChallenge(verifier);
         const state = randomString(24);
@@ -140,7 +172,7 @@ const SignInGate = ({children, scopes}: GateProps) => {
             audience: 'api.atlassian.com',
             client_id: clientId!,
             scope: (scopes.length ? scopes : requestedScopes).join(' '),
-            redirect_uri: redirectUri,
+            redirect_uri: callbackUri,
             response_type: 'code',
             prompt: 'consent',
             state,
@@ -251,7 +283,7 @@ const SignInGate = ({children, scopes}: GateProps) => {
                         grantType: 'authorization_code',
                         code,
                         codeVerifier: verifier,
-                        redirectUri,
+                        redirectUri: ensureRedirectUri(),
                     }),
                 });
                 const baseSession = toSession(tokenResponse);
