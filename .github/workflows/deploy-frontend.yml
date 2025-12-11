@@ -56,6 +56,9 @@ jobs:
             --build-arg VITE_AZURE_AD_CLIENT_ID="${{ secrets.VITE_AZURE_AD_CLIENT_ID }}" \
             --build-arg VITE_AZURE_AD_TENANT_ID="${{ secrets.VITE_AZURE_AD_TENANT_ID }}" \
             --build-arg VITE_AZURE_AD_SCOPES="${{ secrets.VITE_AZURE_AD_SCOPES }}" \
+            --build-arg VITE_ATLASSIAN_CLIENT_ID="${{ secrets.VITE_ATLASSIAN_CLIENT_ID }}" \
+            --build-arg VITE_ATLASSIAN_REDIRECT_URI="${{ secrets.VITE_ATLASSIAN_REDIRECT_URI }}" \
+            --build-arg VITE_ATLASSIAN_SCOPES="${{ secrets.VITE_ATLASSIAN_SCOPES }}" \
             --build-arg VITE_API_URL="${{ env.VITE_API_URL }}" \
             --build-arg VITE_APP_PROFILE="${{ env.VITE_APP_PROFILE }}" \
             -t ${{ secrets.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} \
