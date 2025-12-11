@@ -81,4 +81,4 @@ jobs:
         run: |
           echo "✅ Frontend deployed successfully!"
           echo "🏷️ Image: ${{ env.IMAGE_TAG }}"
-          echo "🌐 URL: https://jira-frontend.gentleflower-2695c362.eastus.azurecontainerapps.io"
+          echo "🌐 URL: https://jiracopilot.com"
