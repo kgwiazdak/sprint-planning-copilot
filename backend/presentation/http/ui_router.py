@@ -344,7 +344,8 @@ async def upload_voice_sample(
 
 
 @router.get("/mock/audio")
-def download_mock_audio(_user: CurrentUser):
+
+def download_mock_audio():
     settings = get_settings()
     if not settings.mock_audio.enabled:
         raise HTTPException(status_code=404, detail="Mock audio disabled.")

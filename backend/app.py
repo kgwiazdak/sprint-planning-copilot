@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import logging
+
 # Sprint Planning Copilot API
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -8,7 +12,10 @@ from fastapi.middleware.cors import CORSMiddleware
 # Ensure .env is loaded before any container/settings singletons are constructed.
 load_dotenv(dotenv_path=".env")
 
+from backend.container import get_meeting_queue_worker
 from backend.presentation.http.ui_router import public_router, router as ui_router
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -33,3 +40,33 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+
+
+@app.on_event("startup")
+async def _start_queue_worker() -> None:
+    try:
+        worker = get_meeting_queue_worker()
+    except Exception:  # pragma: no cover - defensive
+        logger.exception("Failed to initialize the Azure queue worker.")
+        return
+
+    if worker is None:
+        logger.info("Azure queue worker is not configured; skipping start.")
+        return
+
+    task = asyncio.create_task(worker.run_forever(), name="azure-queue-worker")
+    app.state.queue_worker = worker
+    app.state.queue_worker_task = task
+    logger.info("Azure queue worker background task started.")
+
+
+@app.on_event("shutdown")
+async def _shutdown_queue_worker() -> None:
+    worker = getattr(app.state, "queue_worker", None)
+    task: asyncio.Task[None] | None = getattr(app.state, "queue_worker_task", None)
+    if worker:
+        worker.stop()
+    if task:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
