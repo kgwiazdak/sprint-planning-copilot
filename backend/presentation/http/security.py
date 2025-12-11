@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import jwt
+import logging
 import time
 import urllib.request
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from backend import audit
 from backend.settings import AtlassianOAuthSettings, AzureADSettings, get_settings
 
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -187,6 +189,16 @@ async def require_authenticated_user(
     settings = get_settings()
     atl_enabled = settings.atlassian_oauth.enabled
     azure_enabled = settings.azure_ad.enabled
+    logger.info(
+        "auth.require start",
+        extra={
+            "azure_enabled": azure_enabled,
+            "azure_require_auth": settings.azure_ad.require_auth,
+            "atl_enabled": atl_enabled,
+            "atl_require_auth": settings.atlassian_oauth.require_auth,
+            "credentials_provided": bool(credentials and credentials.credentials),
+        },
+    )
 
     def _anonymous():
         anon = AuthenticatedUser(subject="anonymous", name=None, tenant_id=None, roles=[], claims={})
@@ -201,15 +213,18 @@ async def require_authenticated_user(
             audit.reset_actor(audit_token)
 
     if not credentials:
+        logger.warning("auth.require missing credentials")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization header missing.")
 
     if atl_enabled:
         validator = _get_atlassian_validator()
         if validator is None:
+            logger.error("auth.require atlassian validator unavailable")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Atlassian auth not configured.")
         try:
             claims = validator.validate(credentials.credentials)
         except Exception as exc:
+            logger.warning("auth.require atlassian token invalid: %s", exc)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token.") from exc
         user = AuthenticatedUser(
             subject=claims.get("sub") or "anonymous",
@@ -221,10 +236,12 @@ async def require_authenticated_user(
     else:
         validator = _get_validator()
         if validator is None:
+            logger.error("auth.require azure validator unavailable")
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Azure AD not configured.")
         try:
             claims = validator.validate(credentials.credentials)
         except Exception as exc:
+            logger.warning("auth.require azure token invalid: %s", exc)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid access token.") from exc
         user = AuthenticatedUser(
             subject=claims.get("sub") or claims.get("oid") or "anonymous",
