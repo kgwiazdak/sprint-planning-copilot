@@ -13,12 +13,13 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.responses import FileResponse
 from pathlib import Path
 from pydantic import BaseModel, Field
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from backend.application.commands.meeting_import import MeetingImportPayload, SubmitMeetingImportCommand
 from backend.application.services.push_to_jira import PushTasksToJiraService
 from backend.container import get_mock_audio_path
-from backend.domain.ports import MeetingsRepositoryPort
+from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
+from backend.domain.status import MeetingStatus
 from backend.infrastructure.jira import JiraClient, JiraClientError
 from backend.infrastructure.persistence.sqlite import TASK_STATUSES
 from backend.infrastructure.storage.blob import BlobStorageConfigError, BlobStorageService
@@ -26,6 +27,7 @@ from backend.presentation.http.dependencies import (
     blob_storage_service,
     data_repository,
     jira_client as jira_dependency,
+    meeting_queue,
     submit_import_command,
     worker_blob_storage_service,
 )
@@ -178,8 +180,67 @@ class MeetingImportRequest(BaseModel):
     projectKey: str | None = None
 
 
+class QueueStats(BaseModel):
+    configured: bool = False
+    approximateMessageCount: int | None = None
+    error: str | None = None
+
+
+class QueueHealthResponse(BaseModel):
+    processingCount: int
+    queuedCount: int
+    azureQueue: QueueStats
+    stalled: bool
+
+
 def _repo(repo: MeetingsRepositoryPort = Depends(data_repository)) -> MeetingsRepositoryPort:
     return repo
+
+
+def _count_meeting_statuses(meetings: list[dict[str, Any]]) -> tuple[int, int]:
+    queued = 0
+    processing = 0
+    for meeting in meetings:
+        status = meeting.get("status")
+        if status == MeetingStatus.QUEUED.value:
+            queued += 1
+        elif status == MeetingStatus.PROCESSING.value:
+            processing += 1
+    return queued, processing
+
+
+@router.get("/queue/status", response_model=QueueHealthResponse)
+def queue_status(
+        user: CurrentUser,
+        repo: MeetingsRepositoryPort = Depends(_repo),
+        queue_port: MeetingImportQueuePort = Depends(meeting_queue),
+):
+    meetings = repo.list_meetings(owner_id=user.subject)
+    queued_count, processing_count = _count_meeting_statuses(meetings)
+    queue_client = getattr(queue_port, "queue_client", None)
+    approximate_message_count: int | None = None
+    queue_error: str | None = None
+    azure_configured = False
+    if queue_client:
+        azure_configured = True
+        try:
+            props = queue_client.get_queue_properties()
+            approximate_message_count = int(getattr(props, "approximate_message_count", 0) or 0)
+        except Exception as exc:  # pragma: no cover - best effort logging
+            logger.warning("Failed to read Azure queue properties: %s", exc)
+            queue_error = str(exc)
+    azure_stats = QueueStats(
+        configured=azure_configured,
+        approximateMessageCount=approximate_message_count,
+        error=queue_error,
+    )
+    stalled = queued_count > 0 and processing_count == 0
+    return QueueHealthResponse(
+        processingCount=processing_count,
+        queuedCount=queued_count,
+        azureQueue=azure_stats,
+        stalled=stalled,
+    )
 
 
 @router.get("/meetings")

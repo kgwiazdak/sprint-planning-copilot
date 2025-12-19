@@ -63,7 +63,7 @@ class RAGEstimator:
         Settings.llm = None  # avoid accidental default OpenAI usage
         self._embed_model = self._build_embedding_model()
         self._reranker = self._build_reranker()
-        self._client = self._build_chroma_client()
+        self._client = self._build_qdrant_client()
         self._vector_store = self._build_vector_store(self._client)
         self._storage = StorageContext.from_defaults(vector_store=self._vector_store)
         self._mock_llm = MockLLM() if self._config.use_mock_embeddings else None
@@ -80,8 +80,7 @@ class RAGEstimator:
         )
         self._confluence_seeded = False
 
-    def _build_chroma_client(self):
-        # renamed to keep wiring minimal; builds Qdrant client.
+    def _build_qdrant_client(self):
         if self._config.use_mock_embeddings:
             return QdrantClient(location=":memory:", prefer_grpc=False)
         if self._config.qdrant_url:

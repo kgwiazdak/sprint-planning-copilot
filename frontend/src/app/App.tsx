@@ -87,25 +87,24 @@ const NavList = () => {
 export const App = () => (
     <Box
         sx={(theme) => ({
-            height: '100vh',
-            minHeight: 0,
-            overflow: 'hidden',
+            minHeight: '100vh',
             backgroundColor: theme.palette.background.default,
             backgroundImage:
                 theme.palette.mode === 'light'
                     ? 'radial-gradient(circle at 20% 20%, rgba(14,165,233,0.2), transparent 45%), radial-gradient(circle at 80% 0%, rgba(99,102,241,0.12), transparent 40%)'
                     : 'radial-gradient(circle at 20% 20%, rgba(2,132,199,0.35), transparent 45%), radial-gradient(circle at 80% 0%, rgba(99,102,241,0.2), transparent 40%)',
+            py: {xs: 3, md: 5},
         })}
     >
         <Box
             sx={{
+                width: '100%',
                 maxWidth: '1500px',
                 margin: '0 auto',
                 display: 'flex',
                 flexDirection: {xs: 'column', md: 'row'},
                 gap: {xs: 3, md: 4},
                 padding: {xs: 3, md: 5},
-                height: '100%',
                 minHeight: 0,
             }}
         >
@@ -123,7 +122,7 @@ export const App = () => (
                     borderRadius: 3,
                     position: 'relative',
                     alignSelf: 'stretch',
-                    height: '100%',
+                    minHeight: 0,
                     background:
                         theme.palette.mode === 'light'
                             ? 'rgba(255,255,255,0.9)'
@@ -166,7 +165,6 @@ export const App = () => (
                 sx={(theme) => ({
                     display: 'flex',
                     flexDirection: 'column',
-                    height: '100%',
                     minHeight: 0,
                     overflow: 'hidden',
                     borderRadius: 4,
