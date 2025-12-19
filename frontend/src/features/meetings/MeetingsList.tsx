@@ -19,6 +19,8 @@ import {
     TableRow,
     TextField,
     Typography,
+    useMediaQuery,
+    useTheme,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -37,6 +39,8 @@ import {PageHeader} from '../../components/PageHeader';
 
 export const MeetingsList = () => {
     const navigate = useNavigate();
+    const theme = useTheme();
+    const isMobileView = useMediaQuery(theme.breakpoints.down('md'));
     const {
         data: meetings = [],
         isLoading,
@@ -216,94 +220,190 @@ export const MeetingsList = () => {
                 ))}
             </Stack>
             <Paper
-                sx={{
+                sx={(theme) => ({
                     borderRadius: 3,
                     flexGrow: 1,
                     minHeight: 0,
                     display: 'flex',
                     flexDirection: 'column',
-                    overflow: 'hidden',
-                }}
+                    overflow: 'visible',
+                    border: `1px solid ${theme.palette.divider}`,
+                })}
             >
-                <TableContainer
-                    sx={{
-                        flexGrow: 1,
-                        overflowY: 'auto',
-                    }}
-                >
-                    <Table size="small" stickyHeader>
-                        <TableHead>
-                            <TableRow>
-                                <TableCell>Title</TableCell>
-                                <TableCell>Started at</TableCell>
-                                <TableCell>Status</TableCell>
-                                <TableCell>Draft tasks</TableCell>
-                                <TableCell align="right">Actions</TableCell>
-                            </TableRow>
-                        </TableHead>
-                        <TableBody>
-                            {isLoading
-                                ? Array.from({length: 3}).map((_, index) => (
-                                    <TableRow key={index}>
-                                        <TableCell colSpan={5}>
-                                            <Skeleton height={32}/>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
-                                : sortedMeetings.map((meeting) => (
-                                    <TableRow key={meeting.id} hover>
-                                        <TableCell>
-                                            <Typography fontWeight={500}>{meeting.title}</Typography>
-                                        </TableCell>
-                                        <TableCell>{formatDateTime(meeting.startedAt)}</TableCell>
-                                        <TableCell>
-                                            <Chip
-                                                size="small"
-                                                label={meeting.status}
-                                                color={getStatusColor(meeting.status)}
-                                            />
-                                        </TableCell>
-                                        <TableCell>{meeting.draftTaskCount}</TableCell>
-                                        <TableCell align="right">
-                                            <Stack direction="row" spacing={1} justifyContent="flex-end">
-                                                <Button
-                                                    size="small"
-                                                    variant="outlined"
-                                                    endIcon={<OpenInNew fontSize="small"/>}
-                                                    onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
-                                                >
-                                                    Open tasks
-                                                </Button>
-                                                <IconButton
-                                                    aria-label="Edit meeting"
-                                                    color="inherit"
-                                                    onClick={() => setEditingMeeting(meeting)}
-                                                    size="small"
-                                                >
-                                                    <EditIcon fontSize="small"/>
-                                                </IconButton>
-                                                <IconButton
-                                                    aria-label="Delete meeting"
-                                                    color="inherit"
-                                                    onClick={() => setConfirmTarget(meeting)}
-                                                    size="small"
-                                                >
-                                                    <DeleteIcon fontSize="small"/>
-                                                </IconButton>
-                                            </Stack>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            {!isLoading && sortedMeetings.length === 0 && (
+                {isMobileView ? (
+                    <Stack spacing={1} sx={{p: 1}}>
+                        {isLoading
+                            ? Array.from({length: 3}).map((_, index) => (
+                                  <Paper
+                                      key={index}
+                                      elevation={0}
+                                      sx={{
+                                          p: 2,
+                                          borderRadius: 2,
+                                          border: `1px solid ${theme.palette.divider}`,
+                                          backgroundColor:
+                                              theme.palette.mode === 'light'
+                                                  ? 'rgba(255,255,255,0.8)'
+                                                  : 'rgba(15,23,42,0.8)',
+                                      }}
+                                  >
+                                      <Skeleton height={32}/>
+                                  </Paper>
+                              ))
+                            : sortedMeetings.map((meeting) => (
+                                  <Paper
+                                      key={meeting.id}
+                                      elevation={0}
+                                      sx={{
+                                          p: 2,
+                                          borderRadius: 2,
+                                          border: `1px solid ${theme.palette.divider}`,
+                                          backgroundColor:
+                                              theme.palette.mode === 'light'
+                                                  ? 'rgba(255,255,255,0.8)'
+                                                  : 'rgba(15,23,42,0.8)',
+                                      }}
+                                  >
+                                      <Stack spacing={0.75}>
+                                          <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap">
+                                              <Typography fontWeight={600}>{meeting.title}</Typography>
+                                              <Chip
+                                                  size="small"
+                                                  label={meeting.status}
+                                                  color={getStatusColor(meeting.status)}
+                                              />
+                                          </Stack>
+                                          <Typography variant="caption" color="text.secondary">
+                                              {formatDateTime(meeting.startedAt)}
+                                          </Typography>
+                                          <Typography variant="caption" color="text.secondary">
+                                              Draft tasks: {meeting.draftTaskCount}
+                                          </Typography>
+                                          <Stack
+                                              direction={{xs: 'column', sm: 'row'}}
+                                              spacing={1}
+                                              alignItems="center"
+                                              justifyContent="space-between"
+                                              flexWrap="wrap"
+                                          >
+                                              <Button
+                                                  fullWidth
+                                                  size="small"
+                                                  variant="outlined"
+                                                  endIcon={<OpenInNew fontSize="small"/>}
+                                                  onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
+                                              >
+                                                  Open tasks
+                                              </Button>
+                                              <Stack direction="row" spacing={0.5} sx={{ml: {sm: 'auto'}}}>
+                                                  <IconButton
+                                                      aria-label="Edit meeting"
+                                                      color="inherit"
+                                                      onClick={() => setEditingMeeting(meeting)}
+                                                      size="small"
+                                                  >
+                                                      <EditIcon fontSize="small"/>
+                                                  </IconButton>
+                                                  <IconButton
+                                                      aria-label="Delete meeting"
+                                                      color="inherit"
+                                                      onClick={() => setConfirmTarget(meeting)}
+                                                      size="small"
+                                                  >
+                                                      <DeleteIcon fontSize="small"/>
+                                                  </IconButton>
+                                              </Stack>
+                                          </Stack>
+                                      </Stack>
+                                  </Paper>
+                              ))}
+                        {!isLoading && sortedMeetings.length === 0 && (
+                            <Typography variant="body2" sx={{p: 1}}>
+                                No meetings yet.
+                            </Typography>
+                        )}
+                    </Stack>
+                ) : (
+                    <TableContainer
+                        sx={{
+                            flexGrow: 1,
+                            overflowY: 'auto',
+                        }}
+                    >
+                        <Table size="small" stickyHeader>
+                            <TableHead>
                                 <TableRow>
-                                    <TableCell colSpan={5}>
-                                        <Typography variant="body2">No meetings yet.</Typography>
-                                    </TableCell>
+                                    <TableCell>Title</TableCell>
+                                    <TableCell>Started at</TableCell>
+                                    <TableCell>Status</TableCell>
+                                    <TableCell>Draft tasks</TableCell>
+                                    <TableCell align="right">Actions</TableCell>
                                 </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </TableContainer>
+                            </TableHead>
+                            <TableBody>
+                                {isLoading
+                                    ? Array.from({length: 3}).map((_, index) => (
+                                          <TableRow key={index}>
+                                              <TableCell colSpan={5}>
+                                                  <Skeleton height={32}/>
+                                              </TableCell>
+                                          </TableRow>
+                                      ))
+                                    : sortedMeetings.map((meeting) => (
+                                          <TableRow key={meeting.id} hover>
+                                              <TableCell>
+                                                  <Typography fontWeight={500}>{meeting.title}</Typography>
+                                              </TableCell>
+                                              <TableCell>{formatDateTime(meeting.startedAt)}</TableCell>
+                                              <TableCell>
+                                                  <Chip
+                                                      size="small"
+                                                      label={meeting.status}
+                                                      color={getStatusColor(meeting.status)}
+                                                  />
+                                              </TableCell>
+                                              <TableCell>{meeting.draftTaskCount}</TableCell>
+                                              <TableCell align="right">
+                                                  <Stack direction="row" spacing={1} justifyContent="flex-end">
+                                                      <Button
+                                                          size="small"
+                                                          variant="outlined"
+                                                          endIcon={<OpenInNew fontSize="small"/>}
+                                                          onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
+                                                      >
+                                                          Open tasks
+                                                      </Button>
+                                                      <IconButton
+                                                          aria-label="Edit meeting"
+                                                          color="inherit"
+                                                          onClick={() => setEditingMeeting(meeting)}
+                                                          size="small"
+                                                      >
+                                                          <EditIcon fontSize="small"/>
+                                                      </IconButton>
+                                                      <IconButton
+                                                          aria-label="Delete meeting"
+                                                          color="inherit"
+                                                          onClick={() => setConfirmTarget(meeting)}
+                                                          size="small"
+                                                      >
+                                                          <DeleteIcon fontSize="small"/>
+                                                      </IconButton>
+                                                  </Stack>
+                                              </TableCell>
+                                          </TableRow>
+                                      ))}
+                                {!isLoading && sortedMeetings.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5}>
+                                            <Typography variant="body2">No meetings yet.</Typography>
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                )}
             </Paper>
             <ConfirmDialog
                 open={Boolean(confirmTarget)}

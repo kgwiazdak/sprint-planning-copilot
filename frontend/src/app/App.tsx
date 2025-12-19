@@ -127,7 +127,7 @@ export const App = () => (
                         theme.palette.mode === 'light'
                             ? 'rgba(255,255,255,0.9)'
                             : 'rgba(15,23,42,0.92)',
-                    overflow: 'hidden',
+                    overflow: 'visible',
                 })}
             >
                 <Stack spacing={1}>
@@ -166,7 +166,6 @@ export const App = () => (
                     display: 'flex',
                     flexDirection: 'column',
                     minHeight: 0,
-                    overflow: 'hidden',
                     borderRadius: 4,
                     border: `1px solid ${theme.palette.divider}`,
                     padding: {xs: 2.5, md: 4},
@@ -181,7 +180,7 @@ export const App = () => (
                             : '0 40px 70px rgba(2,6,23,0.85)',
                 })}
             >
-                <Box sx={{flexGrow: 1, minHeight: 0, overflow: 'hidden'}}>
+                <Box sx={{flexGrow: 1, minHeight: 0}}>
                     <Routes>
                         <Route path="/" element={<Navigate to="/meetings" replace/>}/>
                         <Route path="/meetings" element={<MeetingsList/>}/>
