@@ -140,7 +140,13 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
         return self._serialize_meeting(document, 0)
 
     def update_meeting(
-            self, meeting_id: str, *, title: str | None, started_at: str | None, owner_id: str
+            self,
+            meeting_id: str,
+            *,
+            title: str | None,
+            started_at: str | None,
+            project_key: str | None,
+            owner_id: str,
     ) -> dict[str, Any]:
         self._audit("update", meeting_id=meeting_id)
         existing = self.get_meeting(meeting_id, owner_id=owner_id)
@@ -151,6 +157,8 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             updated["title"] = title
         if started_at is not None:
             updated["startedAt"] = started_at
+        if project_key is not None:
+            updated["projectKey"] = project_key
         self._meetings.upsert_item(
             {
                 "id": meeting_id,
@@ -161,6 +169,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
                 "transcript": existing.get("transcript"),
                 "sourceUrl": existing.get("sourceUrl"),
                 "sourceText": existing.get("sourceText"),
+                "projectKey": updated.get("projectKey"),
                 "ownerId": owner_id,
             }
         )

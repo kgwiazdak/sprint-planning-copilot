@@ -60,9 +60,15 @@ class MeetingsRepositoryPort(Protocol):
         """Fetch a single meeting."""
 
     def update_meeting(
-            self, meeting_id: str, *, title: str | None, started_at: str | None, owner_id: str
+            self,
+            meeting_id: str,
+            *,
+            title: str | None,
+            started_at: str | None,
+            project_key: str | None,
+            owner_id: str,
     ) -> dict[str, Any]:
-        """Modify meeting metadata."""
+        """Modify meeting metadata, including the target Jira project."""
 
     def delete_meeting(self, meeting_id: str, *, owner_id: str) -> bool:
         """Remove a meeting and its tasks."""

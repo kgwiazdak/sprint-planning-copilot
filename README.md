@@ -142,7 +142,8 @@ OPENAI_MODEL=gpt-4-turbo
 MOCK_LLM=1  # Uses deterministic mock responses, no API calls
 ```
 
-#### **Jira Integration**
+#### **Jira Integration (service account fallback)**
+If you sign in with Atlassian OAuth in the UI, you can omit these and pick the target Jira project at runtime. These keys are only needed for a static service account fallback.
 ```env
 JIRA_BASE_URL=https://your-company.atlassian.net
 JIRA_PROJECT_KEY=SCRUM
@@ -531,8 +532,8 @@ az storage cors add \
 **Cause**: Invalid credentials, missing fields, or custom field mismatch
 
 **Solution**:
-1. Verify `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`
-2. Check project key exists: `JIRA_PROJECT_KEY`
+1. If using Atlassian OAuth, confirm the app scopes include `read:jira-work` and `write:jira-work` and that the signed-in user can access the selected project.
+2. If using the service-account fallback, verify `JIRA_BASE_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` and that `JIRA_PROJECT_KEY` exists.
 3. Verify story points field ID (if used): `JIRA_STORY_POINTS_FIELD`
 4. Check API error response for detailed Jira error message
 
@@ -563,7 +564,7 @@ AZURE_STORAGE_QUEUE_NAME=meeting-imports
 AZURE_SPEECH_KEY=your-key
 AZURE_SPEECH_REGION=eastus
 
-# Jira (required for approval step)
+# Jira (service account fallback; optional when using Atlassian OAuth)
 JIRA_BASE_URL=https://your-company.atlassian.net
 JIRA_PROJECT_KEY=TEST
 JIRA_EMAIL=you@company.com
@@ -602,7 +603,7 @@ COSMOS_TASKS_CONTAINER=tasks
 COSMOS_USERS_CONTAINER=users
 COSMOS_RUNS_CONTAINER=runs
 
-# Jira
+# Jira (service account fallback; optional when using Atlassian OAuth)
 JIRA_BASE_URL=https://your-company.atlassian.net
 JIRA_PROJECT_KEY=SCRUM
 JIRA_EMAIL=bot@company.com

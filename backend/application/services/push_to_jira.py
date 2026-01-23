@@ -31,9 +31,7 @@ class PushTasksToJiraService:
             return PushTasksResult(total=0, pushed=0, skipped=0)
 
         tasks = self._repo.get_tasks_by_ids(ids, owner_id=owner_id)
-        target_project = project_key or self._jira.default_project_key
-        if not target_project:
-            raise JiraClientError("Jira project key is required to push tasks.")
+        target_project = self._resolve_project_key(tasks, explicit_project_key=project_key, owner_id=owner_id)
         pushed = 0
         skipped = 0
         for task in tasks:
@@ -83,6 +81,27 @@ class PushTasksToJiraService:
             if slug:
                 sanitized.append(slug[:255])
         return sanitized
+
+    def _resolve_project_key(
+            self,
+            tasks: list[dict],
+            *,
+            explicit_project_key: str | None,
+            owner_id: str,
+    ) -> str:
+        if explicit_project_key:
+            return explicit_project_key
+        meeting_ids = {task.get("meetingId") for task in tasks if task.get("meetingId")}
+        if not meeting_ids:
+            raise JiraClientError("Jira project key is required to push tasks; select a project before approving.")
+        if len(meeting_ids) > 1:
+            raise JiraClientError("Tasks span multiple meetings; choose a Jira project explicitly.")
+        meeting_id = meeting_ids.pop()
+        meeting = self._repo.get_meeting(meeting_id, owner_id=owner_id)
+        project_key = meeting.get("projectKey") if meeting else None
+        if not project_key:
+            raise JiraClientError("Meeting has no Jira project; set one before pushing tasks to Jira.")
+        return project_key
 
     def _resolve_assignee_account(self, task: dict, *, owner_id: str) -> str | None:
         user_id = task.get("assigneeId")

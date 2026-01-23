@@ -1,0 +1,8 @@
+{
+  "meeting_id": "example",
+  "project_key": "SCRUM",
+  "tasks_total": 4,
+  "estimated": 2,
+  "kept": 2,
+  "refused": 0
+}

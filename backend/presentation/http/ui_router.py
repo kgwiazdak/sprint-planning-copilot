@@ -52,12 +52,13 @@ class MeetingCreate(BaseModel):
     startedAt: str
     sourceUrl: str | None = None
     sourceText: str | None = None
-    projectKey: str | None = None
+    projectKey: str = Field(..., min_length=1)
 
 
 class MeetingUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=3)
     startedAt: str | None = None
+    projectKey: str | None = Field(default=None, min_length=1)
 
 
 class TaskUpdate(BaseModel):
@@ -177,7 +178,7 @@ class MeetingImportRequest(BaseModel):
     blobUrl: str = Field(..., min_length=1)
     originalFilename: str | None = None
     meetingId: str | None = None
-    projectKey: str | None = None
+    projectKey: str = Field(..., min_length=1)
 
 
 class QueueStats(BaseModel):
@@ -277,6 +278,7 @@ def update_meeting(
             meeting_id,
             title=payload.title,
             started_at=payload.startedAt,
+            project_key=payload.projectKey,
             owner_id=user.subject,
         )
     except ValueError as exc:
@@ -334,12 +336,11 @@ def bulk_approve_tasks(
 ):
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
     try:
-        project_key = payload.projectKey or jira.default_project_key
-        if not project_key:
-            raise HTTPException(status_code=400, detail="Jira project key is required.")
-        result = service.push(payload.ids, owner_id=user.subject, project_key=project_key)
+        result = service.push(payload.ids, owner_id=user.subject, project_key=payload.projectKey)
     except JiraClientError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        message = str(exc)
+        status = 400 if "project" in message.lower() else 502
+        raise HTTPException(status_code=status, detail=message) from exc
     return {"updated": result.pushed, "pushed": result.pushed, "skipped": result.skipped}
 
 

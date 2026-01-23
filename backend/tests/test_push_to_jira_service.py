@@ -7,10 +7,11 @@ from backend.infrastructure.jira import JiraClientError, JiraIssue
 
 
 class FakeRepo:
-    def __init__(self, tasks: list[dict], users: dict[str, dict] | None = None) -> None:
+    def __init__(self, tasks: list[dict], users: dict[str, dict] | None = None, meetings: dict[str, dict] | None = None) -> None:
         self._tasks = tasks
         self.marked: list[tuple[str, str, str | None]] = []
         self.users = users or {}
+        self.meetings = meetings or {}
 
     def get_tasks_by_ids(self, ids, *, owner_id: str):
         return [task for task in self._tasks if task["id"] in ids]
@@ -24,6 +25,9 @@ class FakeRepo:
     def update_user_jira_account(self, user_id: str, account_id: str, *, owner_id: str) -> None:
         if user_id in self.users:
             self.users[user_id]["jiraAccountId"] = account_id
+
+    def get_meeting(self, meeting_id: str, *, owner_id: str):
+        return self.meetings.get(meeting_id)
 
 
 class FakeJiraClient:
@@ -48,6 +52,7 @@ class FakeJiraClient:
 
 
 def test_pushes_tasks_and_marks_repository():
+    meeting_id = "meeting-1"
     task = {
         "id": "task-1",
         "summary": "Implement login",
@@ -58,8 +63,9 @@ def test_pushes_tasks_and_marks_repository():
         "storyPoints": 5,
         "assigneeAccountId": "user-123",
         "sourceQuote": "We must finish login",
+        "meetingId": meeting_id,
     }
-    repo = FakeRepo([task])
+    repo = FakeRepo([task], meetings={meeting_id: {"id": meeting_id, "projectKey": "SCRUM"}})
     jira = FakeJiraClient()
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
@@ -73,12 +79,14 @@ def test_pushes_tasks_and_marks_repository():
 
 
 def test_skips_tasks_already_linked_to_jira():
+    meeting_id = "meeting-2"
     task = {
         "id": "task-1",
         "summary": "Done task",
         "jiraIssueKey": "SCRUM-9",
+        "meetingId": meeting_id,
     }
-    repo = FakeRepo([task])
+    repo = FakeRepo([task], meetings={meeting_id: {"id": meeting_id, "projectKey": "SCRUM"}})
     jira = FakeJiraClient()
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
@@ -106,12 +114,14 @@ def test_raises_when_jira_rejects_request():
 
 
 def test_sanitizes_labels_before_pushing():
+    meeting_id = "meeting-3"
     task = {
         "id": "task-1",
         "summary": "Label cleanup",
         "labels": ["Data ingestion", " model drift ", "QA&Ops"],
+        "meetingId": meeting_id,
     }
-    repo = FakeRepo([task])
+    repo = FakeRepo([task], meetings={meeting_id: {"id": meeting_id, "projectKey": "SCRUM"}})
     jira = FakeJiraClient()
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
@@ -121,15 +131,17 @@ def test_sanitizes_labels_before_pushing():
 
 
 def test_looks_up_jira_account_when_missing(tmp_path=None):
+    meeting_id = "meeting-4"
     task = {
         "id": "task-2",
         "summary": "Assign via lookup",
         "assigneeId": "user-42",
+        "meetingId": meeting_id,
     }
     users = {
         "user-42": {"id": "user-42", "displayName": "Sam Carter", "jiraAccountId": None},
     }
-    repo = FakeRepo([task], users=users)
+    repo = FakeRepo([task], users=users, meetings={meeting_id: {"id": meeting_id, "projectKey": "SCRUM"}})
     jira = FakeJiraClient()
     jira.lookup["Sam Carter"] = "jira-user-123"
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
@@ -141,8 +153,9 @@ def test_looks_up_jira_account_when_missing(tmp_path=None):
 
 
 def test_uses_explicit_project_when_provided():
-    task = {"id": "task-3", "summary": "Explicit project"}
-    repo = FakeRepo([task])
+    meeting_id = "meeting-5"
+    task = {"id": "task-3", "summary": "Explicit project", "meetingId": meeting_id}
+    repo = FakeRepo([task], meetings={meeting_id: {"id": meeting_id, "projectKey": "DEF"}})
     jira = FakeJiraClient(project_key="DEF")
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 
@@ -152,8 +165,9 @@ def test_uses_explicit_project_when_provided():
 
 
 def test_raises_when_no_project_available():
-    task = {"id": "task-4", "summary": "No project key"}
-    repo = FakeRepo([task])
+    meeting_id = "meeting-6"
+    task = {"id": "task-4", "summary": "No project key", "meetingId": meeting_id}
+    repo = FakeRepo([task], meetings={meeting_id: {"id": meeting_id, "projectKey": None}})
     jira = FakeJiraClient(project_key=None)
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
 

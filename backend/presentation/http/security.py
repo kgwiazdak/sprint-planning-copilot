@@ -24,6 +24,7 @@ class AuthenticatedUser:
     tenant_id: str | None
     roles: list[str]
     claims: dict[str, Any]
+    access_token: str | None = None
 
     @property
     def audit_id(self) -> str:
@@ -232,6 +233,7 @@ async def require_authenticated_user(
             tenant_id=claims.get("aud"),
             roles=list(claims.get("roles") or claims.get("groups") or []),
             claims=claims,
+            access_token=credentials.credentials,
         )
     else:
         validator = _get_validator()
@@ -249,6 +251,7 @@ async def require_authenticated_user(
             tenant_id=claims.get("tid"),
             roles=list(claims.get("roles") or claims.get("groups") or []),
             claims=claims,
+            access_token=None,
         )
 
     audit_token = audit.bind_actor(user.audit_id)

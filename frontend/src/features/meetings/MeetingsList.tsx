@@ -21,6 +21,7 @@ import {
     Typography,
     useMediaQuery,
     useTheme,
+    MenuItem,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import EditIcon from '@mui/icons-material/EditOutlined';
@@ -29,7 +30,7 @@ import {useNavigate} from 'react-router-dom';
 import {Controller, useForm} from 'react-hook-form';
 import {zodResolver} from '@hookform/resolvers/zod';
 import {useSnackbar} from 'notistack';
-import {useDeleteMeeting, useMeetings, useUpdateMeeting,} from '../../api/hooks';
+import {useDeleteMeeting, useJiraProjects, useMeetings, useUpdateMeeting,} from '../../api/hooks';
 import {ConfirmDialog} from '../../components/ConfirmDialog';
 import type {MeetingUpdateValues} from '../../schemas/meeting';
 import {MeetingUpdateSchema} from '../../schemas/meeting';
@@ -72,6 +73,7 @@ export const MeetingsList = () => {
                 data: {
                     title: values.title,
                     startedAt: new Date(values.startedAt).toISOString(),
+                    projectKey: values.projectKey,
                 },
             });
             enqueueSnackbar('Meeting updated', {variant: 'success'});
@@ -260,12 +262,17 @@ export const MeetingsList = () => {
                                           border: `1px solid ${theme.palette.divider}`,
                                           backgroundColor:
                                               theme.palette.mode === 'light'
-                                                  ? 'rgba(255,255,255,0.8)'
-                                                  : 'rgba(15,23,42,0.8)',
+                                                  ? 'rgba(255,255,255,0.95)'
+                                                  : 'rgba(15,23,42,0.85)',
                                       }}
                                   >
                                       <Stack spacing={0.75}>
-                                          <Stack direction="row" alignItems="center" justifyContent="space-between" flexWrap="wrap">
+                                          <Stack
+                                              direction="row"
+                                              alignItems="center"
+                                              justifyContent="space-between"
+                                              flexWrap="wrap"
+                                          >
                                               <Typography fontWeight={600}>{meeting.title}</Typography>
                                               <Chip
                                                   size="small"
@@ -273,46 +280,51 @@ export const MeetingsList = () => {
                                                   color={getStatusColor(meeting.status)}
                                               />
                                           </Stack>
-                                          <Typography variant="caption" color="text.secondary">
-                                              {formatDateTime(meeting.startedAt)}
-                                          </Typography>
-                                          <Typography variant="caption" color="text.secondary">
-                                              Draft tasks: {meeting.draftTaskCount}
-                                          </Typography>
                                           <Stack
-                                              direction={{xs: 'column', sm: 'row'}}
+                                              direction="row"
+                                              flexWrap="wrap"
                                               spacing={1}
-                                              alignItems="center"
-                                              justifyContent="space-between"
+                                              sx={{color: 'text.secondary'}}
+                                          >
+                                              <Typography variant="caption">
+                                                  {formatDateTime(meeting.startedAt)}
+                                              </Typography>
+                                              <Typography variant="caption">
+                                                  Draft tasks: {meeting.draftTaskCount}
+                                              </Typography>
+                                          </Stack>
+                                          <Button
+                                              fullWidth
+                                              size="small"
+                                              variant="contained"
+                                              color="primary"
+                                              endIcon={<OpenInNew fontSize="small"/>}
+                                              onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
+                                          >
+                                              Open tasks
+                                          </Button>
+                                          <Stack
+                                              direction="row"
+                                              spacing={1}
+                                              justifyContent="flex-end"
                                               flexWrap="wrap"
                                           >
-                                              <Button
-                                                  fullWidth
+                                              <IconButton
+                                                  aria-label="Edit meeting"
+                                                  color="inherit"
+                                                  onClick={() => setEditingMeeting(meeting)}
                                                   size="small"
-                                                  variant="outlined"
-                                                  endIcon={<OpenInNew fontSize="small"/>}
-                                                  onClick={() => navigate(`/meetings/${meeting.id}/tasks`)}
                                               >
-                                                  Open tasks
-                                              </Button>
-                                              <Stack direction="row" spacing={0.5} sx={{ml: {sm: 'auto'}}}>
-                                                  <IconButton
-                                                      aria-label="Edit meeting"
-                                                      color="inherit"
-                                                      onClick={() => setEditingMeeting(meeting)}
-                                                      size="small"
-                                                  >
-                                                      <EditIcon fontSize="small"/>
-                                                  </IconButton>
-                                                  <IconButton
-                                                      aria-label="Delete meeting"
-                                                      color="inherit"
-                                                      onClick={() => setConfirmTarget(meeting)}
-                                                      size="small"
-                                                  >
-                                                      <DeleteIcon fontSize="small"/>
-                                                  </IconButton>
-                                              </Stack>
+                                                  <EditIcon fontSize="small"/>
+                                              </IconButton>
+                                              <IconButton
+                                                  aria-label="Delete meeting"
+                                                  color="inherit"
+                                                  onClick={() => setConfirmTarget(meeting)}
+                                                  size="small"
+                                              >
+                                                  <DeleteIcon fontSize="small"/>
+                                              </IconButton>
                                           </Stack>
                                       </Stack>
                                   </Paper>
@@ -448,14 +460,41 @@ const EditMeetingForm = ({
                              onSubmit,
                              onCancel,
                          }: EditMeetingFormProps) => {
-    const {control, handleSubmit, formState} = useForm<MeetingUpdateValues>({
+    const {data: projects = [], isLoading: projectsLoading, isError: projectsError} = useJiraProjects();
+    const projectOptions = useMemo(
+        () => {
+            const options = projects.map((project) => ({
+                value: project.key,
+                label: `${project.name} (${project.key})`,
+            }));
+            if (meeting.projectKey && !options.some((option) => option.value === meeting.projectKey)) {
+                options.unshift({
+                    value: meeting.projectKey,
+                    label: `${meeting.projectKey} (current)`,
+                });
+            }
+            return options;
+        },
+        [projects, meeting.projectKey],
+    );
+    const {control, handleSubmit, formState, watch, setValue} = useForm<MeetingUpdateValues>({
         resolver: zodResolver(MeetingUpdateSchema),
         mode: 'onChange',
         defaultValues: {
             title: meeting.title,
             startedAt: toDateTimeInput(meeting.startedAt),
+            projectKey: meeting.projectKey ?? '',
         },
     });
+    const projectKeyValue = watch('projectKey');
+    useEffect(() => {
+        if (!projectKeyValue) {
+            const fallback = projectOptions[0]?.value || meeting.projectKey || '';
+            if (fallback) {
+                setValue('projectKey', fallback, {shouldValidate: true});
+            }
+        }
+    }, [projectKeyValue, projectOptions, meeting.projectKey, setValue]);
 
     return (
         <Stack
@@ -474,6 +513,30 @@ const EditMeetingForm = ({
                         error={Boolean(fieldState.error)}
                         helperText={fieldState.error?.message}
                     />
+                )}
+            />
+            <Controller
+                name="projectKey"
+                control={control}
+                render={({field, fieldState}) => (
+                    <TextField
+                        {...field}
+                        select
+                        label="Jira project"
+                        required
+                        disabled={projectsLoading || projectOptions.length === 0}
+                        error={Boolean(fieldState.error) || projectsError}
+                        helperText={
+                            fieldState.error?.message ||
+                            (projectsError ? 'Failed to load Jira projects' : undefined)
+                        }
+                    >
+                        {projectOptions.map((option) => (
+                            <MenuItem key={option.value} value={option.value}>
+                                {option.label}
+                            </MenuItem>
+                        ))}
+                    </TextField>
                 )}
             />
             <Controller

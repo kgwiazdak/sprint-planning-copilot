@@ -30,20 +30,26 @@ class JiraClient:
             self,
             *,
             base_url: str,
-            email: str,
-            api_token: str,
+            email: str | None = None,
+            api_token: str | None = None,
+            bearer_token: str | None = None,
             project_key: str | None = None,
             story_points_field: str | None = None,
             timeout: float = 20.0,
     ) -> None:
-        if not base_url or not email or not api_token:
-            raise ValueError("Jira client requires base_url, email and api_token.")
+        if not base_url:
+            raise ValueError("Jira client requires base_url.")
+        if not bearer_token and (not email or not api_token):
+            raise ValueError("Jira client requires email and api_token unless bearer_token is provided.")
         self._base_url = base_url.rstrip("/")
         self._api_base = f"{self._base_url}/rest/api/3"
         self._project_key = project_key
         self._story_points_field = story_points_field
-        token = base64.b64encode(f"{email}:{api_token}".encode("utf-8")).decode("utf-8")
-        self._auth_header = f"Basic {token}"
+        if bearer_token:
+            self._auth_header = f"Bearer {bearer_token}"
+        else:
+            token = base64.b64encode(f"{email}:{api_token}".encode("utf-8")).decode("utf-8")
+            self._auth_header = f"Basic {token}"
         self._timeout = timeout
 
     def create_issue(

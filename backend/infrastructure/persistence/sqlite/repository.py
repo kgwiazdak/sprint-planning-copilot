@@ -113,7 +113,13 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
         return created
 
     def update_meeting(
-            self, meeting_id: str, *, title: str | None, started_at: str | None, owner_id: str
+            self,
+            meeting_id: str,
+            *,
+            title: str | None,
+            started_at: str | None,
+            project_key: str | None,
+            owner_id: str,
     ) -> dict[str, Any]:
         self._audit("update", meeting_id=meeting_id)
         with self._db.session() as session:
@@ -128,6 +134,8 @@ class SqliteMeetingsRepository(MeetingsRepositoryPort):
                 meeting.title = title
             if started_at is not None:
                 meeting.started_at = started_at
+            if project_key is not None:
+                meeting.project_key = project_key
             session.commit()
         updated = self.get_meeting(meeting_id, owner_id=owner_id)
         if updated is None:

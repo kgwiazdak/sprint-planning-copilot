@@ -1,8 +1,8 @@
-import {useMemo, useState, type ReactNode} from 'react';
-import {Alert, Box, Button, Chip, Paper, Stack, Typography} from '@mui/material';
+import {useEffect, useMemo, useState, type ReactNode} from 'react';
+import {Alert, Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography} from '@mui/material';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useSnackbar} from 'notistack';
-import {useApproveTasks, useMeeting, useMeetingTasks, useRejectTasks, useUsers,} from '../../api/hooks';
+import {useApproveTasks, useJiraProjects, useMeeting, useMeetingTasks, useRejectTasks, useUpdateMeeting, useUsers,} from '../../api/hooks';
 import {TasksTable} from './TasksTable';
 import {DataGridToolbar} from '../../components/DataGridToolbar';
 import {TaskDrawer} from '../../components/TaskDrawer';
@@ -58,14 +58,42 @@ export const MeetingTasksPage = () => {
         refetchIntervalInBackground: true,
     });
     const {data: users = []} = useUsers();
+    const {data: projects = [], isLoading: projectsLoading, isError: projectsError} = useJiraProjects();
+    const projectOptions = useMemo(
+        () => {
+            const options = projects.map((project) => ({
+                value: project.key,
+                label: `${project.name} (${project.key})`,
+            }));
+            if (meeting?.projectKey && !options.some((option) => option.value === meeting.projectKey)) {
+                options.unshift({
+                    value: meeting.projectKey,
+                    label: `${meeting.projectKey} (current)`,
+                });
+            }
+            return options;
+        },
+        [projects, meeting?.projectKey],
+    );
     const approveTasks = useApproveTasks();
     const rejectTasks = useRejectTasks();
+    const updateMeeting = useUpdateMeeting();
     const navigate = useNavigate();
     const {enqueueSnackbar} = useSnackbar();
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [search, setSearch] = useState('');
     const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+    useEffect(() => {
+        if (meeting?.projectKey && meeting.projectKey !== selectedProjectKey) {
+            setSelectedProjectKey(meeting.projectKey);
+            return;
+        }
+        if (!selectedProjectKey && projectOptions.length) {
+            setSelectedProjectKey(projectOptions[0].value);
+        }
+    }, [meeting?.projectKey, projectOptions, selectedProjectKey]);
+    const [selectedProjectKey, setSelectedProjectKey] = useState<string>('');
 
     const filteredTasks = useMemo(
         () =>
@@ -79,6 +107,21 @@ export const MeetingTasksPage = () => {
         [tasks, statusFilter, search],
     );
 
+    const handleProjectChange = async (value: string) => {
+        setSelectedProjectKey(value);
+        if (!meeting || !value || meeting.projectKey === value) {
+            return;
+        }
+        try {
+            await updateMeeting.mutateAsync({
+                id: meeting.id,
+                data: {projectKey: value},
+            });
+        } catch (error) {
+            enqueueSnackbar((error as Error).message, {variant: 'error'});
+        }
+    };
+
     if (!id) {
         return <Alert severity="warning">Meeting not found.</Alert>;
     }
@@ -89,7 +132,7 @@ export const MeetingTasksPage = () => {
         isLoading ||
         isFetching;
     const selectionDisabled = baseActionDisabled || selectedIds.length === 0;
-    const targetProjectKey = meeting?.projectKey ?? '';
+    const targetProjectKey = selectedProjectKey || '';
     const approveDisabled =
         selectionDisabled || !targetProjectKey;
 
@@ -208,7 +251,30 @@ export const MeetingTasksPage = () => {
                             />
                             <MetadataItem
                                 label="Target project"
-                                value={meeting.projectKey || 'Not set'}
+                                value={
+                                    <TextField
+                                        select
+                                        size="small"
+                                        value={selectedProjectKey}
+                                        onChange={(event) => handleProjectChange(event.target.value)}
+                                        disabled={projectsLoading || projectOptions.length === 0}
+                                        error={projectsError}
+                                        helperText={
+                                            projectsError
+                                                ? 'Failed to load Jira projects'
+                                                : projectOptions.length === 0
+                                                    ? 'No Jira projects available'
+                                                    : 'Used when pushing tasks to Jira'
+                                        }
+                                        sx={{minWidth: 240}}
+                                    >
+                                        {projectOptions.map((option) => (
+                                            <MenuItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </MenuItem>
+                                        ))}
+                                    </TextField>
+                                }
                             />
                         </Stack>
                     )}
