@@ -30,6 +30,7 @@ class JiraClient:
             self,
             *,
             base_url: str,
+            browse_base_url: str | None = None,
             email: str | None = None,
             api_token: str | None = None,
             bearer_token: str | None = None,
@@ -43,6 +44,7 @@ class JiraClient:
             raise ValueError("Jira client requires email and api_token unless bearer_token is provided.")
         self._base_url = base_url.rstrip("/")
         self._api_base = f"{self._base_url}/rest/api/3"
+        self._browse_base = (browse_base_url or self._base_url).rstrip("/")
         self._project_key = project_key
         self._story_points_field = story_points_field
         if bearer_token:
@@ -85,7 +87,7 @@ class JiraClient:
         key = data.get("key")
         if not key:
             raise JiraClientError(f"Jira API response did not include an issue key: {data}")
-        issue_url = f"{self._base_url}/browse/{key}"
+        issue_url = f"{self._browse_base}/browse/{key}"
         return JiraIssue(key=key, url=issue_url)
 
     def _build_fields(

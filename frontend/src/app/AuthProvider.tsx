@@ -23,14 +23,13 @@ const accessibleResourcesUrl = 'https://api.atlassian.com/oauth/token/accessible
 const clientId = import.meta.env.VITE_ATLASSIAN_CLIENT_ID;
 
 const canonicalizeRedirectUri = (value?: string) => {
-    if (!value) return undefined;
-    const trimmed = value.trim();
+    if (!value) {
+        return undefined;
+    }
     try {
-        // Validate format but preserve the original string to avoid adding/removing slashes.
-        void new URL(trimmed);
-        return trimmed;
+        return new URL(value).toString();
     } catch {
-        return trimmed || undefined;
+        return value;
     }
 };
 

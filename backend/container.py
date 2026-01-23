@@ -308,6 +308,7 @@ def get_jira_client() -> JiraClient | None:
     try:
         return JiraClient(
             base_url=cfg.base_url,
+            browse_base_url=cfg.base_url,
             email=cfg.email,
             api_token=cfg.api_token,
             project_key=cfg.project_key,
