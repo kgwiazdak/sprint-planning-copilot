@@ -12,6 +12,12 @@ type AtlassianSession = {
     resourceName?: string;
 };
 
+type AtlassianConfig = {
+    clientId?: string;
+    redirectUri?: string;
+    scopes: string[];
+};
+
 type GateProps = PropsWithChildren<{
     scopes: string[];
 }>;
@@ -20,7 +26,7 @@ const storageKey = 'atlassian-oauth-session';
 const stateKey = 'atlassian-oauth-state';
 const verifierKey = 'atlassian-oauth-verifier';
 const accessibleResourcesUrl = 'https://api.atlassian.com/oauth/token/accessible-resources';
-const clientId = import.meta.env.VITE_ATLASSIAN_CLIENT_ID;
+const clientIdEnv = import.meta.env.VITE_ATLASSIAN_CLIENT_ID;
 
 const canonicalizeRedirectUri = (value?: string) => {
     if (!value) {
@@ -33,8 +39,8 @@ const canonicalizeRedirectUri = (value?: string) => {
     }
 };
 
-const resolveRedirectUri = () => {
-    const envValue = (import.meta.env.VITE_ATLASSIAN_REDIRECT_URI ?? '').trim();
+const resolveRedirectUri = (value?: string) => {
+    const envValue = (value ?? import.meta.env.VITE_ATLASSIAN_REDIRECT_URI ?? '').trim();
     const baseValue =
         envValue ||
         (typeof window !== 'undefined'
@@ -46,23 +52,22 @@ const resolveRedirectUri = () => {
     return canonicalizeRedirectUri(baseValue);
 };
 
-const redirectUri = resolveRedirectUri();
-const ensureRedirectUri = () => {
-    if (!redirectUri) {
-        throw new Error('Atlassian redirect URI is not configured.');
-    }
-    return redirectUri;
-};
-const requestedScopes = (import.meta.env.VITE_ATLASSIAN_SCOPES ??
+const defaultScopes = (import.meta.env.VITE_ATLASSIAN_SCOPES ??
     'read:confluence-space.summary read:confluence-content.all read:jira-work write:jira-work manage:jira-project manage:jira-configuration'
 ).split(/[\s,]+/).filter(Boolean);
+
+const defaultConfig: AtlassianConfig = {
+    clientId: clientIdEnv,
+    redirectUri: resolveRedirectUri(),
+    scopes: defaultScopes,
+};
+
 const apiBase = (() => {
     const base = import.meta.env.VITE_API_URL ?? '/api';
     return base.endsWith('/') ? base.slice(0, -1) : base;
 })();
 const tokenExchangeUrl = `${apiBase}/auth/atlassian/token`;
-
-const atlassianAuthEnabled = Boolean(clientId && redirectUri);
+const tokenConfigUrl = `${apiBase}/auth/atlassian/config`;
 
 const randomString = (length = 64) => {
     const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
@@ -159,7 +164,17 @@ const SignInGate = ({children, scopes}: GateProps) => {
     const [session, setSession] = useState<AtlassianSession | null>(() => readSession());
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [ready, setReady] = useState(!atlassianAuthEnabled);
+    const [ready, setReady] = useState(false);
+    const [runtimeConfig, setRuntimeConfig] = useState<AtlassianConfig>(defaultConfig);
+
+    const atlassianAuthEnabled = Boolean(runtimeConfig.clientId && runtimeConfig.redirectUri);
+
+    const ensureRedirectUri = useCallback(() => {
+        if (!runtimeConfig.redirectUri) {
+            throw new Error('Atlassian redirect URI is not configured.');
+        }
+        return runtimeConfig.redirectUri;
+    }, [runtimeConfig.redirectUri]);
 
     const buildAuthUrl = useCallback(async () => {
         const callbackUri = ensureRedirectUri();
@@ -170,8 +185,8 @@ const SignInGate = ({children, scopes}: GateProps) => {
         sessionStorage.setItem(stateKey, state);
         const params = new URLSearchParams({
             audience: 'api.atlassian.com',
-            client_id: clientId!,
-            scope: (scopes.length ? scopes : requestedScopes).join(' '),
+            client_id: runtimeConfig.clientId!,
+            scope: (scopes.length ? scopes : runtimeConfig.scopes).join(' '),
             redirect_uri: callbackUri,
             response_type: 'code',
             prompt: 'consent',
@@ -180,7 +195,7 @@ const SignInGate = ({children, scopes}: GateProps) => {
             code_challenge_method: 'S256',
         });
         return `https://auth.atlassian.com/authorize?${params.toString()}`;
-    }, [scopes]);
+    }, [ensureRedirectUri, runtimeConfig.clientId, runtimeConfig.scopes, scopes]);
 
     const signOut = useCallback(() => {
         setSession(null);
@@ -197,13 +212,14 @@ const SignInGate = ({children, scopes}: GateProps) => {
 
     const toSession = useCallback((tokenResponse: TokenResponse): AtlassianSession => {
         const expiresIn = typeof tokenResponse.expires_in === 'number' ? tokenResponse.expires_in : 3600;
+        const scopeValue = tokenResponse.scope ?? (scopes.length ? scopes.join(' ') : runtimeConfig.scopes.join(' '));
         return {
             accessToken: tokenResponse.access_token,
             refreshToken: tokenResponse.refresh_token,
-            scope: tokenResponse.scope ?? (scopes.length ? scopes.join(' ') : requestedScopes.join(' ')),
+            scope: scopeValue,
             expiresAt: Date.now() + expiresIn * 1000,
         };
-    }, [scopes]);
+    }, [runtimeConfig.scopes, scopes]);
 
     const refreshSession = useCallback(async (refreshToken: string) => {
         const tokenResponse = await fetchJson(tokenExchangeUrl, {
@@ -242,13 +258,34 @@ const SignInGate = ({children, scopes}: GateProps) => {
     }, [session, refreshSession, signOut]);
 
     useEffect(() => {
+        const loadConfig = async () => {
+            try {
+                const resp = await fetch(tokenConfigUrl, {headers: {Accept: 'application/json'}});
+                if (resp.ok) {
+                    const cfg = await resp.json() as AtlassianConfig;
+                    setRuntimeConfig({
+                        clientId: cfg.clientId || defaultConfig.clientId,
+                        redirectUri: resolveRedirectUri(cfg.redirectUri) || defaultConfig.redirectUri,
+                        scopes: cfg.scopes && cfg.scopes.length ? cfg.scopes : defaultConfig.scopes,
+                    });
+                }
+            } catch (err) {
+                console.warn('Unable to fetch Atlassian config; using built-in defaults', err);
+            } finally {
+                setReady(true);
+            }
+        };
+        void loadConfig();
+    }, []);
+
+    useEffect(() => {
         if (!atlassianAuthEnabled) {
             setAuthTokenProvider(null);
             return;
         }
         setAuthTokenProvider(ensureFreshToken);
         return () => setAuthTokenProvider(null);
-    }, [ensureFreshToken]);
+    }, [atlassianAuthEnabled, ensureFreshToken]);
 
     useEffect(() => {
         if (!atlassianAuthEnabled) {
@@ -262,7 +299,6 @@ const SignInGate = ({children, scopes}: GateProps) => {
             const verifier = sessionStorage.getItem(verifierKey);
 
             if (!code) {
-                setReady(true);
                 if (session && isExpired(session) && session.refreshToken) {
                     await refreshSession(session.refreshToken);
                 }
@@ -290,7 +326,6 @@ const SignInGate = ({children, scopes}: GateProps) => {
                 const hydrated = await attachAccessibleResource(baseSession.accessToken, baseSession);
                 setSession(hydrated);
                 persistSession(hydrated);
-                setReady(true);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Unable to finish Confluence sign-in.');
             } finally {
@@ -301,7 +336,7 @@ const SignInGate = ({children, scopes}: GateProps) => {
             }
         };
         void maybeHandleCallback();
-    }, [session, refreshSession, toSession]);
+    }, [atlassianAuthEnabled, ensureRedirectUri, refreshSession, session, toSession]);
 
     const handleSignIn = async () => {
         if (!atlassianAuthEnabled) {
@@ -328,11 +363,19 @@ const SignInGate = ({children, scopes}: GateProps) => {
         [],
     );
 
+    if (!ready) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" height="100vh" padding={4}>
+                <CircularProgress/>
+            </Box>
+        );
+    }
+
     if (!atlassianAuthEnabled) {
         return <>{children}</>;
     }
 
-    if (!ready || busy) {
+    if (busy) {
         return (
             <Box display="flex" justifyContent="center" alignItems="center" height="100vh" padding={4}>
                 <Stack spacing={2} alignItems="center">
@@ -470,9 +513,5 @@ const SignInGate = ({children, scopes}: GateProps) => {
 };
 
 export const AuthProvider = ({children}: PropsWithChildren) => {
-    if (!atlassianAuthEnabled) {
-        return <>{children}</>;
-    }
-
-    return <SignInGate scopes={requestedScopes}>{children}</SignInGate>;
+    return <SignInGate scopes={defaultScopes}>{children}</SignInGate>;
 };

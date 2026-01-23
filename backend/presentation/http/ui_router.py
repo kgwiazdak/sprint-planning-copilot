@@ -164,6 +164,24 @@ def exchange_atlassian_token(payload: AtlassianTokenExchange):
     return token_response
 
 
+class AtlassianConfigResponse(BaseModel):
+    clientId: str | None = None
+    redirectUri: str | None = None
+    scopes: list[str] = []
+
+
+@public_router.get("/atlassian/config", response_model=AtlassianConfigResponse)
+def atlassian_config():
+    settings = get_settings().atlassian_oauth
+    raw_scopes = os.getenv("ATLASSIAN_SCOPES") or os.getenv("VITE_ATLASSIAN_SCOPES") or ""
+    scopes = [scope.strip() for scope in re.split(r"[,\s]+", raw_scopes) if scope.strip()]
+    return AtlassianConfigResponse(
+        clientId=settings.client_id,
+        redirectUri=settings.redirect_uri,
+        scopes=scopes,
+    )
+
+
 class BlobUploadResponse(BaseModel):
     uploadUrl: str
     blobUrl: str
