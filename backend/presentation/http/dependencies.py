@@ -77,7 +77,11 @@ def jira_client(user: AuthenticatedUser = Depends(require_authenticated_user)) -
         try:
             resource = _fetch_jira_resource_from_atlassian(user.access_token)
             if resource:
-                base_url = resource.get("url") or f"https://api.atlassian.com/ex/jira/{resource.get('id')}"
+                cloud_id = resource.get("id")
+                api_base = f"https://api.atlassian.com/ex/jira/{cloud_id}" if cloud_id else None
+                base_url = api_base or resource.get("url")
+                if not base_url:
+                    raise ValueError("Atlassian resource did not include an id or url.")
                 return JiraClient(
                     base_url=base_url,
                     api_token=None,

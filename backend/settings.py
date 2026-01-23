@@ -182,13 +182,13 @@ class AppConfig(BaseModel):
                 require_auth=os.getenv("AZURE_AD_REQUIRE_AUTH", "false").lower() in {"1", "true", "yes", "on"},
             ),
             atlassian_oauth=AtlassianOAuthSettings(
-                client_id=os.getenv("ATLASSIAN_CLIENT_ID"),
+                client_id=os.getenv("ATLASSIAN_CLIENT_ID") or os.getenv("VITE_ATLASSIAN_CLIENT_ID"),
                 client_secret=os.getenv("ATLASSIAN_CLIENT_SECRET"),
                 audience=os.getenv("ATLASSIAN_AUDIENCE", "api.atlassian.com"),
                 issuer=os.getenv("ATLASSIAN_ISSUER", "https://auth.atlassian.com"),
                 jwks_url=os.getenv("ATLASSIAN_JWKS_URL", "https://auth.atlassian.com/.well-known/jwks.json"),
                 jwks=os.getenv("ATLASSIAN_JWKS"),
-                redirect_uri=os.getenv("ATLASSIAN_REDIRECT_URI"),
+                redirect_uri=os.getenv("ATLASSIAN_REDIRECT_URI") or os.getenv("VITE_ATLASSIAN_REDIRECT_URI"),
                 require_auth=os.getenv("ATLASSIAN_REQUIRE_AUTH", "false").lower() in {"1", "true", "yes", "on"},
             ),
         )

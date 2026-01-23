@@ -610,7 +610,7 @@ JIRA_EMAIL=bot@company.com
 JIRA_API_TOKEN=your-prod-token
 JIRA_STORY_POINTS_FIELD=customfield_10016
 
-# Atlassian OAuth (Confluence/Jira login)
+# Atlassian OAuth (Confluence/Jira login) - front and back must share the same client/redirect
 VITE_ATLASSIAN_CLIENT_ID=your-confluence-oauth-client-id
 VITE_ATLASSIAN_REDIRECT_URI=https://your-frontend.example.com
 VITE_ATLASSIAN_SCOPES=read:jira-work write:jira-work read:confluence-content.all

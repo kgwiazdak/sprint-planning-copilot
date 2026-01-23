@@ -17,7 +17,7 @@ from typing import Annotated, Any, Literal
 
 from backend.application.commands.meeting_import import MeetingImportPayload, SubmitMeetingImportCommand
 from backend.application.services.push_to_jira import PushTasksToJiraService
-from backend.container import get_mock_audio_path
+from backend.container import get_mock_audio_path, get_jira_client
 from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
 from backend.domain.status import MeetingStatus
 from backend.infrastructure.jira import JiraClient, JiraClientError
@@ -357,11 +357,26 @@ def list_users(user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo))
 
 @router.get("/jira/projects", response_model=list[JiraProjectResponse])
 def list_jira_projects(user: CurrentUser, jira: JiraClient = Depends(jira_dependency)):
-    try:
-        projects = jira.list_projects()
-    except JiraClientError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return [JiraProjectResponse(key=project.key, name=project.name) for project in projects]
+    def _safe_list(client: JiraClient):
+        try:
+            return client.list_projects()
+        except JiraClientError as exc:
+            raise exc
+        except Exception as exc:  # pragma: no cover - defensive
+            raise JiraClientError(str(exc)) from exc
+
+    last_error: str | None = None
+    for client in (jira, get_jira_client()):
+        if client is None:
+            continue
+        try:
+            projects = _safe_list(client)
+            return [JiraProjectResponse(key=project.key, name=project.name) for project in projects]
+        except JiraClientError as exc:
+            last_error = str(exc)
+            continue
+    detail = last_error or "Unable to list Jira projects."
+    raise HTTPException(status_code=502, detail=detail)
 
 
 @router.post("/users/voice", response_model=VoiceUploadResponse, status_code=201)
