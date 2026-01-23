@@ -1,4 +1,4 @@
-import {useEffect, useMemo, useState, type ReactNode} from 'react';
+import {useMemo, useState, type ReactNode} from 'react';
 import {Alert, Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography} from '@mui/material';
 import {useNavigate, useParams} from 'react-router-dom';
 import {useSnackbar} from 'notistack';
@@ -59,22 +59,19 @@ export const MeetingTasksPage = () => {
     });
     const {data: users = []} = useUsers();
     const {data: projects = [], isLoading: projectsLoading, isError: projectsError} = useJiraProjects();
-    const projectOptions = useMemo(
-        () => {
-            const options = projects.map((project) => ({
-                value: project.key,
-                label: `${project.name} (${project.key})`,
-            }));
-            if (meeting?.projectKey && !options.some((option) => option.value === meeting.projectKey)) {
-                options.unshift({
-                    value: meeting.projectKey,
-                    label: `${meeting.projectKey} (current)`,
-                });
-            }
-            return options;
-        },
-        [projects, meeting?.projectKey],
-    );
+    const projectOptions = (() => {
+        const options = projects.map((project) => ({
+            value: project.key,
+            label: `${project.name} (${project.key})`,
+        }));
+        if (meeting?.projectKey && !options.some((option) => option.value === meeting.projectKey)) {
+            options.unshift({
+                value: meeting.projectKey,
+                label: `${meeting.projectKey} (current)`,
+            });
+        }
+        return options;
+    })();
     const approveTasks = useApproveTasks();
     const rejectTasks = useRejectTasks();
     const updateMeeting = useUpdateMeeting();
@@ -84,15 +81,6 @@ export const MeetingTasksPage = () => {
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
     const [search, setSearch] = useState('');
     const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
-    useEffect(() => {
-        if (meeting?.projectKey && meeting.projectKey !== selectedProjectKey) {
-            setSelectedProjectKey(meeting.projectKey);
-            return;
-        }
-        if (!selectedProjectKey && projectOptions.length) {
-            setSelectedProjectKey(projectOptions[0].value);
-        }
-    }, [meeting?.projectKey, projectOptions, selectedProjectKey]);
     const [selectedProjectKey, setSelectedProjectKey] = useState<string>('');
 
     const filteredTasks = useMemo(
@@ -126,13 +114,14 @@ export const MeetingTasksPage = () => {
         return <Alert severity="warning">Meeting not found.</Alert>;
     }
 
+    const dropdownValue = selectedProjectKey || meeting?.projectKey || projectOptions[0]?.value || '';
     const baseActionDisabled =
         approveTasks.isPending ||
         rejectTasks.isPending ||
         isLoading ||
         isFetching;
     const selectionDisabled = baseActionDisabled || selectedIds.length === 0;
-    const targetProjectKey = selectedProjectKey || '';
+    const targetProjectKey = dropdownValue || '';
     const approveDisabled =
         selectionDisabled || !targetProjectKey;
 
@@ -255,7 +244,7 @@ export const MeetingTasksPage = () => {
                                     <TextField
                                         select
                                         size="small"
-                                        value={selectedProjectKey}
+                                        value={dropdownValue}
                                         onChange={(event) => handleProjectChange(event.target.value)}
                                         disabled={projectsLoading || projectOptions.length === 0}
                                         error={projectsError}

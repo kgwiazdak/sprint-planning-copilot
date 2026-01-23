@@ -477,7 +477,7 @@ const EditMeetingForm = ({
         },
         [projects, meeting.projectKey],
     );
-    const {control, handleSubmit, formState, watch, setValue} = useForm<MeetingUpdateValues>({
+    const {control, handleSubmit, formState, getValues, setValue} = useForm<MeetingUpdateValues>({
         resolver: zodResolver(MeetingUpdateSchema),
         mode: 'onChange',
         defaultValues: {
@@ -486,15 +486,16 @@ const EditMeetingForm = ({
             projectKey: meeting.projectKey ?? '',
         },
     });
-    const projectKeyValue = watch('projectKey');
     useEffect(() => {
-        if (!projectKeyValue) {
-            const fallback = projectOptions[0]?.value || meeting.projectKey || '';
-            if (fallback) {
-                setValue('projectKey', fallback, {shouldValidate: true});
-            }
+        const current = getValues('projectKey');
+        if (current) {
+            return;
         }
-    }, [projectKeyValue, projectOptions, meeting.projectKey, setValue]);
+        const fallback = projectOptions[0]?.value || meeting.projectKey || '';
+        if (fallback) {
+            setValue('projectKey', fallback, {shouldValidate: true});
+        }
+    }, [projectOptions, meeting.projectKey, setValue, getValues]);
 
     return (
         <Stack
