@@ -13,9 +13,12 @@ from fastapi.middleware.cors import CORSMiddleware
 load_dotenv(dotenv_path=".env")
 
 from backend.container import get_meeting_queue_worker
+from backend.infrastructure.telemetry.langsmith_setup import configure_langsmith
 from backend.presentation.http.ui_router import public_router, router as ui_router
 
 logger = logging.getLogger(__name__)
+
+configure_langsmith()
 
 
 def create_app() -> FastAPI:

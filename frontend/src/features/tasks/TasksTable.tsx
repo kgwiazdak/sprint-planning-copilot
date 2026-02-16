@@ -7,7 +7,7 @@ import type {
     GridRowSelectionModel,
 } from '@mui/x-data-grid';
 import {DataGrid} from '@mui/x-data-grid';
-import {Box, Chip, Link, MenuItem, TextField, Typography,} from '@mui/material';
+import {Box, Chip, Link, MenuItem, Stack, TextField, Typography,} from '@mui/material';
 import {useSnackbar} from 'notistack';
 import {useUpdateTask} from '../../api/hooks';
 import type {Task, User} from '../../types';
@@ -150,6 +150,36 @@ export const TasksTable = ({
             width: 90,
             editable: true,
             renderEditCell: NumberEditCell,
+        },
+        {
+            field: 'labels',
+            headerName: 'Signals',
+            width: 220,
+            sortable: false,
+            renderCell: (params) => {
+                const labels = (params.row.labels ?? []).filter((label) =>
+                    ['needs-human-review', 'low-confidence-speaker', 'low-confidence-story-points'].includes(label),
+                );
+                if (!labels.length) {
+                    return (
+                        <Typography variant="body2" color="text.secondary">
+                            -
+                        </Typography>
+                    );
+                }
+                return (
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                        {labels.map((label) => (
+                            <Chip
+                                key={label}
+                                size="small"
+                                color={label === 'needs-human-review' ? 'warning' : 'default'}
+                                label={label.replaceAll('-', ' ')}
+                            />
+                        ))}
+                    </Stack>
+                );
+            },
         },
         {
             field: 'status',

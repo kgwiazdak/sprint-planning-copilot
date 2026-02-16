@@ -94,6 +94,15 @@ export const MeetingTasksPage = () => {
                 ),
         [tasks, statusFilter, search],
     );
+    const lowConfidenceCount = useMemo(
+        () =>
+            tasks.filter((task) =>
+                (task.labels ?? []).some((label) =>
+                    ['needs-human-review', 'low-confidence-speaker', 'low-confidence-story-points'].includes(label),
+                ),
+            ).length,
+        [tasks],
+    );
 
     const handleProjectChange = async (value: string) => {
         setSelectedProjectKey(value);
@@ -298,6 +307,12 @@ export const MeetingTasksPage = () => {
                     search={search}
                     onSearchChange={setSearch}
                 />
+                {lowConfidenceCount > 0 && (
+                    <Alert severity="warning" sx={{mb: 1}}>
+                        {lowConfidenceCount} task(s) have low-confidence signals. Review assignee/story points before
+                        pushing to Jira.
+                    </Alert>
+                )}
                 <Box
                     sx={{
                         flexGrow: 1,

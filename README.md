@@ -475,7 +475,7 @@ The repository includes GitHub Actions workflows:
  
   ### Secret Management (Azure Key Vault)
  
-  Use `scripts/bootstrap_keyvault.sh` to create a Key Vault, push every non-empty value from your `.env`, and wire the `jira-api` and `jira-worker` Container Apps to consume secrets via Key Vault references. See `AZURE_KEYVAULT_SETUP.md` for the step-by-step bootstrap.
+  Use `scripts/bootstrap_keyvault.sh` to create a Key Vault, push every non-empty value from your `.env`, and wire the `jira-api` and `jira-worker` Container Apps to consume secrets via Key Vault references. The script defaults to RBAC for new vaults; set `KEYVAULT_ACCESS_MODEL=policy` if you need legacy access policies. See `AZURE_KEYVAULT_SETUP.md` for the step-by-step bootstrap.
  
   ### Required GitHub Secrets
 

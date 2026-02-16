@@ -1,8 +1,36 @@
 {
-  "tasks_total": 6,
-  "estimated": 5,
-  "kept": 1,
-  "refused": 0,
-  "meeting_id": "ec241161-a3b2-4aea-a3f8-2c48912a62bc",
+  "tasks_total": 4,
+  "story_points_estimated": 0,
+  "story_points_kept": 4,
+  "retrievals": [
+    {
+      "task_summary": "Dask parallelization",
+      "estimated_points": 5,
+      "contexts": []
+    },
+    {
+      "task_summary": "Registry update and redeploy",
+      "estimated_points": 3,
+      "contexts": []
+    },
+    {
+      "task_summary": "Drift detection and alerting",
+      "estimated_points": 3,
+      "contexts": []
+    },
+    {
+      "task_summary": "Release brief and checklist",
+      "estimated_points": 1,
+      "contexts": []
+    }
+  ],
+  "top_k": 8,
+  "rerank_top_k": 4,
+  "seeded_confluence": 0,
+  "ingested_history": 7,
+  "ingested_transcript_chunks": 2,
+  "qdrant_target": "https://6670d9f6-5878-48b7-b6b4-4189f44c9764.europe-west3-0.gcp.cloud.qdrant.io",
+  "latency_ms_retrieval": 3748.51615099999,
+  "meeting_id": "95449219-4b69-4af3-ba85-bbcf34f207a1",
   "project_key": "SCRUM"
 }
