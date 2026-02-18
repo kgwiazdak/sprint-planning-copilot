@@ -12,3 +12,4 @@ class MeetingImportJob:
     owner_id: str
     project_key: str | None = None
     original_filename: str | None = None
+    atlassian_access_token: str | None = None

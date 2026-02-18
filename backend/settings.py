@@ -95,6 +95,24 @@ class AtlassianOAuthSettings(BaseModel):
         return bool(self.client_id or self.require_auth)
 
 
+class MCPSettings(BaseModel):
+    enabled: bool = False
+    atlassian_server_url: str | None = None
+    timeout_seconds: float = 30.0
+    allowed_servers: list[str] = []
+
+    @property
+    def atlassian_enabled(self) -> bool:
+        if not self.enabled:
+            return False
+        if not self.atlassian_server_url:
+            return False
+        if not self.allowed_servers:
+            return True
+        allowed = {value.strip().lower() for value in self.allowed_servers if value.strip()}
+        return "atlassian" in allowed or "confluence" in allowed
+
+
 class AppConfig(BaseModel):
     profile: str = "prod"
     blob_storage: BlobStorageSettings = BlobStorageSettings()
@@ -107,6 +125,7 @@ class AppConfig(BaseModel):
     queue: QueueSettings = QueueSettings()
     azure_ad: AzureADSettings = AzureADSettings()
     atlassian_oauth: AtlassianOAuthSettings = AtlassianOAuthSettings()
+    mcp: MCPSettings = MCPSettings()
 
     @classmethod
     def load(cls) -> "AppConfig":
@@ -190,6 +209,16 @@ class AppConfig(BaseModel):
                 jwks=os.getenv("ATLASSIAN_JWKS"),
                 redirect_uri=os.getenv("ATLASSIAN_REDIRECT_URI") or os.getenv("VITE_ATLASSIAN_REDIRECT_URI"),
                 require_auth=os.getenv("ATLASSIAN_REQUIRE_AUTH", "false").lower() in {"1", "true", "yes", "on"},
+            ),
+            mcp=MCPSettings(
+                enabled=os.getenv("MCP_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
+                atlassian_server_url=os.getenv("MCP_ATLASSIAN_SERVER_URL"),
+                timeout_seconds=float(os.getenv("MCP_TIMEOUT_SECONDS", "30")),
+                allowed_servers=[
+                    token.strip()
+                    for token in os.getenv("MCP_ALLOWED_SERVERS", "").split(",")
+                    if token.strip()
+                ],
             ),
         )
 

@@ -38,6 +38,10 @@ def test_rag_estimator_keeps_explicit_points_and_estimates_missing(tmp_path, mon
     assert updated.tasks[0].story_points == 8  # explicit not overwritten
     assert updated.tasks[1].story_points is not None
     assert "rag-estimated" in updated.tasks[1].labels
+    assert "rag-description-enhanced" in updated.tasks[1].labels
+    assert updated.tasks[1].description
+    assert updated.tasks[1].description != "accuracy drop alert"
     assert stats["story_points_kept"] == 1
     assert stats["story_points_estimated"] == 1
+    assert stats["description_enhanced"] >= 1
     assert stats["ingested_history"] == 2

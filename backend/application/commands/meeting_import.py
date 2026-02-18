@@ -17,6 +17,7 @@ class MeetingImportPayload:
     project_key: str | None = None
     meeting_id: str | None = None
     original_filename: str | None = None
+    atlassian_access_token: str | None = None
 
 
 class SubmitMeetingImportCommand:
@@ -49,6 +50,7 @@ class SubmitMeetingImportCommand:
             project_key=payload.project_key,
             original_filename=payload.original_filename,
             owner_id=payload.owner_id,
+            atlassian_access_token=payload.atlassian_access_token,
         )
         await self._queue.enqueue(job)
         self._repo.update_meeting_status(meeting_id, MeetingStatus.QUEUED.value, owner_id=payload.owner_id)

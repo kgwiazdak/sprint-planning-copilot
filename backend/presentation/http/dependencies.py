@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-import logging
+import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
 from fastapi import Depends, HTTPException
 
@@ -20,6 +21,7 @@ from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
 from backend.infrastructure.jira import JiraClient
 from backend.infrastructure.storage.blob import BlobStorageService
 from backend.presentation.http.security import AuthenticatedUser, require_authenticated_user
+from backend.settings import get_settings
 
 
 def extraction_workflow() -> ExtractMeetingUseCase:
@@ -52,48 +54,60 @@ def submit_import_command() -> SubmitMeetingImportCommand:
     return SubmitMeetingImportCommand(repository=get_meetings_repository(), queue=get_meeting_queue())
 
 
-def _fetch_jira_resource_from_atlassian(token: str) -> dict | None:
+def _oauth_jira_client(user: AuthenticatedUser) -> JiraClient | None:
+    token = (user.access_token or "").strip()
+    if not token:
+        return None
+
     req = urllib.request.Request(
         "https://api.atlassian.com/oauth/token/accessible-resources",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json",
-        },
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        method="GET",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        payload = resp.read().decode("utf-8") or "[]"
-    resources = json.loads(payload)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            resources = json.loads(resp.read().decode("utf-8") or "[]")
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+        return None
+
     if not isinstance(resources, list) or not resources:
         return None
-    jira_resources = [r for r in resources if any("jira" in s for s in r.get("scopes", []))]
-    if not jira_resources:
-        jira_resources = resources
-    return jira_resources[0] if jira_resources else None
+
+    cfg = get_settings().jira
+    preferred_host = urlparse((cfg.base_url or "").strip()).hostname
+    selected = None
+    for row in resources:
+        if not isinstance(row, dict):
+            continue
+        if preferred_host and urlparse(str(row.get("url") or "")).hostname == preferred_host:
+            selected = row
+            break
+    if selected is None:
+        selected = next((row for row in resources if isinstance(row, dict)), None)
+    if not isinstance(selected, dict):
+        return None
+
+    cloud_id = str(selected.get("id") or "").strip()
+    if not cloud_id:
+        return None
+    browse_url = str(selected.get("url") or cfg.base_url or "").strip() or None
+    try:
+        return JiraClient(
+            base_url=f"https://api.atlassian.com/ex/jira/{cloud_id}",
+            browse_base_url=browse_url,
+            bearer_token=token,
+            project_key=cfg.project_key,
+            story_points_field=cfg.story_points_field,
+        )
+    except ValueError:
+        return None
 
 
-def jira_client(user: AuthenticatedUser = Depends(require_authenticated_user)) -> JiraClient:
-    # Prefer the Atlassian OAuth token from the current user if available.
-    if user.access_token:
-        try:
-            resource = _fetch_jira_resource_from_atlassian(user.access_token)
-            if resource:
-                cloud_id = resource.get("id")
-                api_base = f"https://api.atlassian.com/ex/jira/{cloud_id}" if cloud_id else None
-                base_url = api_base or resource.get("url")
-                browse_base = resource.get("url")
-                if not base_url:
-                    raise ValueError("Atlassian resource did not include an id or url.")
-                return JiraClient(
-                    base_url=base_url,
-                    browse_base_url=browse_base,
-                    api_token=None,
-                    email=None,
-                    bearer_token=user.access_token,
-                )
-        except Exception as exc:
-            logging.getLogger(__name__).warning(
-                "Falling back to static Jira client; Atlassian token flow failed: %s", exc
-            )
+def jira_client(user: AuthenticatedUser = Depends(require_authenticated_user)):
+    oauth_client = _oauth_jira_client(user)
+    if oauth_client is not None:
+        return oauth_client
+
     client = get_jira_client()
     if client is None:
         raise HTTPException(status_code=503, detail="Jira integration is not configured.")

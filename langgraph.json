@@ -1,0 +1,8 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "meeting_orchestrator_v1": "./backend/infrastructure/llm/langgraph_entry.py:graph"
+  },
+  "env": ".env"
+}

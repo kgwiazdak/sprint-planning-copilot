@@ -9,12 +9,12 @@ packages = [{ include = "backend" }]
 [tool.poetry.dependencies]
 python = ">=3.11,<3.13"
 fastapi = "0.115.2"
-uvicorn = { version = "0.30.6", extras = ["standard"] }
-pydantic = "2.8.2"
+uvicorn = "^0.41"
+pydantic = "^2.12"
 python-multipart = "0.0.9"
-langchain = "0.3.7"
-langchain-openai = "0.2.3"
-langgraph = "^0.2.66"
+langchain = "^1.2.10"
+langchain-openai = "^1.1.9"
+langgraph = "^1.0.8"
 openai = ">=1.52.0,<2.0.0"
 azure-cognitiveservices-speech = ">=1.38,<2.0"
 azure-identity = ">=1.17.0,<2.0.0"
@@ -32,6 +32,7 @@ llama-index-llms-openai = "^0.2.7"
 llama-index-vector-stores-qdrant = "^0.3.0"
 qdrant-client = "^1.12.1"
 sqlalchemy = "^2.0.36"
+mcp = "^1.26.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

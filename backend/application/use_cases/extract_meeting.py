@@ -82,6 +82,7 @@ class ExtractMeetingUseCase:
                 original_filename=job.original_filename,
                 meeting_id=job.meeting_id,
                 owner_id=job.owner_id,
+                atlassian_access_token=getattr(job, "atlassian_access_token", None),
             )
         finally:
             audit.reset_actor(token)
@@ -96,6 +97,7 @@ class ExtractMeetingUseCase:
             meeting_id: str | None = None,
             owner_id: str | None = None,
             project_key: str | None = None,
+            atlassian_access_token: str | None = None,
     ) -> ExtractionResult:
         self._last_extraction_metrics = {}
         self._last_rag_stats = {}
@@ -129,7 +131,14 @@ class ExtractMeetingUseCase:
             transcript_blob_uri = await self._persist_original_file(context)
             transcript = await self._resolve_transcript(context, owner_id=effective_owner)
             result = await self._extract(transcript)
-            result = await self._apply_rag(context, transcript, result, project_key=project_key, owner_id=effective_owner)
+            result = await self._apply_rag(
+                context,
+                transcript,
+                result,
+                project_key=project_key,
+                owner_id=effective_owner,
+                atlassian_access_token=atlassian_access_token,
+            )
             run_meeting_id, run_id = await self._store(
                 context,
                 transcript,
@@ -211,6 +220,7 @@ class ExtractMeetingUseCase:
             *,
             project_key: str | None,
             owner_id: str | None,
+            atlassian_access_token: str | None,
     ) -> ExtractionResult:
         if not self._rag:
             return result
@@ -228,6 +238,7 @@ class ExtractMeetingUseCase:
                 meeting_id=ctx.meeting_id,
                 project_key=project_key,
                 owner_id=owner_id,
+                confluence_access_token=atlassian_access_token,
             )
             self._last_rag_stats = stats
             try:

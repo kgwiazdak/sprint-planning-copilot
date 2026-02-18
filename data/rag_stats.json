@@ -2,35 +2,199 @@
   "tasks_total": 4,
   "story_points_estimated": 0,
   "story_points_kept": 4,
+  "description_enhanced": 4,
   "retrievals": [
     {
       "task_summary": "Dask parallelization",
       "estimated_points": 5,
-      "contexts": []
+      "contexts": [
+        {
+          "score": 0.3334429644276751,
+          "metadata": {
+            "source": "transcript",
+            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:0",
+            "project_key": "SCRUM",
+            "story_points": null
+          },
+          "preview": "Adrian Puchacki: Morning team, let's keep this simple. We need four tasks and clear owners.\nWaldemar Walasik: Morning. Training still takes four hours on Azure, even after the ingest refactor.\nWojciech Puczyk: I can parallelize preprocessing with Dask. Nice and clear: that would be my task.\nAdrian P"
+        },
+        {
+          "score": 0.2839538184148373,
+          "metadata": {
+            "source": "transcript",
+            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:3",
+            "project_key": "SCRUM",
+            "story_points": null
+          },
+          "preview": "edeploy for 3 points, and drift alerting for 3 points.\nAdrian Puchacki: And I own the release brief at 1 point. Four tasks total, owners clear.\nWojciech Puczyk: Timeline: finish by Thursday, quick demo Friday. Let's keep it simple.\nWaldemar Walasik: No extra tasks hiding here. Just these four.\nAdria"
+        },
+        {
+          "score": 0.2727723627949905,
+          "metadata": {
+            "source": "history",
+            "source_id": "9fedb333-3609-4e71-b411-848a2f9e8f12",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nCreate a release readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.2703102529506447,
+          "metadata": {
+            "source": "transcript",
+            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:2",
+            "project_key": "SCRUM",
+            "story_points": null
+          },
+          "preview": "udes Slack notification and MLflow log.\nAdrian Puchacki: Task three: Waldemar, drift detection and alerting, 3 points.\nWojciech Puczyk: Do we need a release brief for stakeholders?\nAdrian Puchacki: Yes, I'll own the release-readiness checklist and brief. Very small.\nWaldemar Walasik: How many points"
+        }
+      ]
     },
     {
       "task_summary": "Registry update and redeploy",
       "estimated_points": 3,
-      "contexts": []
+      "contexts": [
+        {
+          "score": 0.46291004988627577,
+          "metadata": {
+            "source": "history",
+            "source_id": "6731b2cf-74f6-47f8-8db1-e200c79ec947",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nPrepare the release-readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.46291004988627577,
+          "metadata": {
+            "source": "history",
+            "source_id": "62c60e06-54dc-4530-93a3-c960bbf95a63",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.46291004988627577,
+          "metadata": {
+            "source": "history",
+            "source_id": "7e1eb6f4-db19-4beb-976a-7dad96b925ce",
+            "title": "Release brief and checklist",
+            "story_points": 3
+          },
+          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.4285714285714286,
+          "metadata": {
+            "source": "history",
+            "source_id": "9fedb333-3609-4e71-b411-848a2f9e8f12",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nCreate a release readiness checklist and brief for stakeholders."
+        }
+      ]
     },
     {
       "task_summary": "Drift detection and alerting",
       "estimated_points": 3,
-      "contexts": []
+      "contexts": [
+        {
+          "score": 0.6943650748294137,
+          "metadata": {
+            "source": "history",
+            "source_id": "81b8fca9-256c-41d4-887c-2a767d92caa5",
+            "title": "Drift detection and alerting",
+            "story_points": 5
+          },
+          "preview": "Drift detection and alerting\n\nImplement drift detection and alerting with Slack notification and ML flow log."
+        },
+        {
+          "score": 0.5268375041467508,
+          "metadata": {
+            "source": "transcript",
+            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:1",
+            "project_key": "SCRUM",
+            "story_points": null
+          },
+          "preview": "e model registry and redeploy via MLflow. That's my task.\nAdrian Puchacki: How many points do you want for the registry and redeploy, Waldemar?\nWaldemar Walasik: Call it 3 points. Small changes and smoke tests.\nAdrian Puchacki: Good. Task two: Waldemar, registry update plus redeploy, 3 points.\nAdria"
+        },
+        {
+          "score": 0.46147910349544874,
+          "metadata": {
+            "source": "transcript",
+            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:2",
+            "project_key": "SCRUM",
+            "story_points": null
+          },
+          "preview": "udes Slack notification and MLflow log.\nAdrian Puchacki: Task three: Waldemar, drift detection and alerting, 3 points.\nWojciech Puczyk: Do we need a release brief for stakeholders?\nAdrian Puchacki: Yes, I'll own the release-readiness checklist and brief. Very small.\nWaldemar Walasik: How many points"
+        },
+        {
+          "score": 0.4458602343790136,
+          "metadata": {
+            "source": "transcript",
+            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:3",
+            "project_key": "SCRUM",
+            "story_points": null
+          },
+          "preview": "edeploy for 3 points, and drift alerting for 3 points.\nAdrian Puchacki: And I own the release brief at 1 point. Four tasks total, owners clear.\nWojciech Puczyk: Timeline: finish by Thursday, quick demo Friday. Let's keep it simple.\nWaldemar Walasik: No extra tasks hiding here. Just these four.\nAdria"
+        }
+      ]
     },
     {
       "task_summary": "Release brief and checklist",
       "estimated_points": 1,
-      "contexts": []
+      "contexts": [
+        {
+          "score": 0.9733285267845755,
+          "metadata": {
+            "source": "history",
+            "source_id": "6731b2cf-74f6-47f8-8db1-e200c79ec947",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nPrepare the release-readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.9192547197409879,
+          "metadata": {
+            "source": "history",
+            "source_id": "62c60e06-54dc-4530-93a3-c960bbf95a63",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.9192547197409879,
+          "metadata": {
+            "source": "history",
+            "source_id": "7e1eb6f4-db19-4beb-976a-7dad96b925ce",
+            "title": "Release brief and checklist",
+            "story_points": 3
+          },
+          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+        },
+        {
+          "score": 0.8510644963469902,
+          "metadata": {
+            "source": "history",
+            "source_id": "9fedb333-3609-4e71-b411-848a2f9e8f12",
+            "title": "Release brief and checklist",
+            "story_points": 1
+          },
+          "preview": "Release brief and checklist\n\nCreate a release readiness checklist and brief for stakeholders."
+        }
+      ]
     }
   ],
   "top_k": 8,
   "rerank_top_k": 4,
   "seeded_confluence": 0,
-  "ingested_history": 7,
-  "ingested_transcript_chunks": 2,
-  "qdrant_target": "https://6670d9f6-5878-48b7-b6b4-4189f44c9764.europe-west3-0.gcp.cloud.qdrant.io",
-  "latency_ms_retrieval": 3748.51615099999,
-  "meeting_id": "95449219-4b69-4af3-ba85-bbcf34f207a1",
+  "ingested_history": 5,
+  "ingested_transcript_chunks": 4,
+  "latency_ms_retrieval": 5025.258110006689,
+  "meeting_id": "5299c05b-1376-45c9-9a91-04927bb118ab",
   "project_key": "SCRUM"
 }

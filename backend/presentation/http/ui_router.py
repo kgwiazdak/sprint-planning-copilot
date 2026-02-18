@@ -20,7 +20,7 @@ from backend.application.services.push_to_jira import PushTasksToJiraService
 from backend.container import get_mock_audio_path, get_jira_client
 from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
 from backend.domain.status import MeetingStatus
-from backend.infrastructure.jira import JiraClient, JiraClientError
+from backend.infrastructure.jira import JiraClientError
 from backend.infrastructure.persistence.sqlite import TASK_STATUSES
 from backend.infrastructure.storage.blob import BlobStorageConfigError, BlobStorageService
 from backend.presentation.http.dependencies import (
@@ -350,7 +350,7 @@ def bulk_approve_tasks(
         payload: BulkApproveRequest,
         user: CurrentUser,
         repo: MeetingsRepositoryPort = Depends(_repo),
-        jira: JiraClient = Depends(jira_dependency),
+        jira: Any = Depends(jira_dependency),
 ):
     service = PushTasksToJiraService(repo=repo, jira_client=jira)
     try:
@@ -374,8 +374,8 @@ def list_users(user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo))
 
 
 @router.get("/jira/projects", response_model=list[JiraProjectResponse])
-def list_jira_projects(user: CurrentUser, jira: JiraClient = Depends(jira_dependency)):
-    def _safe_list(client: JiraClient):
+def list_jira_projects(user: CurrentUser, jira: Any = Depends(jira_dependency)):
+    def _safe_list(client: Any):
         try:
             return client.list_projects()
         except JiraClientError as exc:
@@ -395,6 +395,20 @@ def list_jira_projects(user: CurrentUser, jira: JiraClient = Depends(jira_depend
             continue
     detail = last_error or "Unable to list Jira projects."
     raise HTTPException(status_code=502, detail=detail)
+
+
+@router.get("/confluence/spaces")
+def list_confluence_spaces(
+        user: CurrentUser,
+        jira: Any = Depends(jira_dependency),
+        limit: int = Query(default=25, ge=1, le=200),
+):
+    if not hasattr(jira, "list_confluence_spaces"):
+        raise HTTPException(status_code=503, detail="Confluence MCP integration is not configured.")
+    try:
+        return jira.list_confluence_spaces(limit=limit)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @router.post("/users/voice", response_model=VoiceUploadResponse, status_code=201)
@@ -491,6 +505,7 @@ async def import_meeting(
                 meeting_id=payload.meetingId,
                 project_key=payload.projectKey,
                 owner_id=user.subject,
+                atlassian_access_token=user.access_token,
             )
         )
     except ValueError as exc:

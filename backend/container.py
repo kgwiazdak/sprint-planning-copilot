@@ -11,6 +11,7 @@ from backend.application.use_cases.extract_meeting import ExtractMeetingUseCase
 from backend.application.services.rag_estimator import RAGEstimator
 from backend.domain.ports import TranscriptionPort
 from backend.infrastructure.jira import JiraClient
+from backend.infrastructure.mcp import MCPAtlassianClient
 from backend.infrastructure.llm.task_extractor import LLMExtractor
 from backend.infrastructure.persistence.cosmos import CosmosMeetingsRepository
 from backend.infrastructure.persistence.sqlite import SqliteMeetingsRepository
@@ -301,7 +302,14 @@ def get_meeting_queue_worker() -> AzureQueueWorker | None:
 
 
 @lru_cache(maxsize=1)
-def get_jira_client() -> JiraClient | None:
+def get_jira_client() -> JiraClient | MCPAtlassianClient | None:
+    mcp_cfg = get_settings().mcp
+    if mcp_cfg.atlassian_enabled:
+        return MCPAtlassianClient(
+            server_url=mcp_cfg.atlassian_server_url or "http://localhost:8111/mcp",
+            timeout_seconds=mcp_cfg.timeout_seconds,
+        )
+
     cfg = get_settings().jira
     if not cfg.base_url or not cfg.email or not cfg.api_token:
         return None

@@ -1,0 +1,38 @@
+# Build stage - export project dependencies from Poetry
+FROM python:3.11-slim AS builder
+
+ENV PIP_NO_CACHE_DIR=1 \
+    POETRY_VERSION=2.2.1 \
+    POETRY_NO_INTERACTION=1
+
+RUN pip install --upgrade pip \
+ && pip install "poetry==${POETRY_VERSION}" \
+ && poetry self add poetry-plugin-export
+
+WORKDIR /app
+
+COPY pyproject.toml poetry.lock ./
+RUN poetry export -f requirements.txt -o requirements.txt --without-hashes --only main
+
+# Runtime stage - LangGraph dev server
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /app/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir "langgraph-cli[inmem]" \
+ && rm requirements.txt
+
+COPY backend backend
+COPY langgraph.json .
+
+EXPOSE 2024
+CMD ["langgraph", "dev", "--config", "langgraph.json", "--host", "0.0.0.0", "--port", "2024", "--no-browser"]
