@@ -119,9 +119,7 @@ export const useUploadVoiceSample = () => {
                 data.append('userId', userId);
             }
             data.append('file', file);
-            const response = await apiClient.post('/users/voice', data, {
-                headers: {'Content-Type': 'multipart/form-data'},
-            });
+            const response = await apiClient.post('/users/voice', data);
             return response.data;
         },
         onSuccess: () => {
@@ -145,11 +143,72 @@ type BlobUploadTicket = {
     meetingId: string;
 };
 
+type LocalUploadTicket = {
+    blobUrl: string;
+    blobPath: string;
+    meetingId: string;
+};
+
+type RuntimeConfig = {
+    ingestBackend: 'azure' | 'local';
+};
+
+type MeetingImportResponse = {
+    meetingId: string;
+    status: 'queued';
+};
+
+const RUNTIME_CONFIG_TTL_MS = 60_000;
+
+let runtimeConfigPromise: Promise<RuntimeConfig> | null = null;
+let runtimeConfigFetchedAt = 0;
+
+const isRuntimeConfig = (value: unknown): value is RuntimeConfig => {
+    if (!value || typeof value !== 'object') {
+        return false;
+    }
+    const ingestBackend = (value as {ingestBackend?: unknown}).ingestBackend;
+    return ingestBackend === 'azure' || ingestBackend === 'local';
+};
+
+const resetRuntimeConfigCache = () => {
+    runtimeConfigPromise = null;
+    runtimeConfigFetchedAt = 0;
+};
+
+const getRuntimeConfig = async (): Promise<RuntimeConfig> => {
+    const now = Date.now();
+    if (!runtimeConfigPromise || now - runtimeConfigFetchedAt > RUNTIME_CONFIG_TTL_MS) {
+        runtimeConfigPromise = apiClient
+            .get('/runtime/config')
+            .then((res) => {
+                const data = res.data;
+                if (!isRuntimeConfig(data)) {
+                    throw new Error('Invalid runtime configuration');
+                }
+                runtimeConfigFetchedAt = Date.now();
+                return data;
+            })
+            .catch((error) => {
+                resetRuntimeConfigCache();
+                throw error;
+            });
+    }
+    return runtimeConfigPromise;
+};
+
 const requestBlobUpload = async (file: File): Promise<BlobUploadTicket> => {
     const {data} = await apiClient.post<BlobUploadTicket>('/uploads/blob', {
         filename: file.name,
         contentType: file.type || 'application/octet-stream',
     });
+    return data;
+};
+
+const uploadFileToLocal = async (file: File): Promise<LocalUploadTicket> => {
+    const form = new FormData();
+    form.append('file', file);
+    const {data} = await apiClient.post<LocalUploadTicket>('/uploads/local', form);
     return data;
 };
 
@@ -168,6 +227,12 @@ const uploadFileToBlob = async (uploadUrl: string, file: File) => {
     }
 };
 
+const assertUploadMetadata = (input: {blobUrl?: string; meetingId?: string}) => {
+    if (!input.blobUrl || !input.meetingId) {
+        throw new Error('Upload response is missing blobUrl or meetingId');
+    }
+};
+
 export const useCreateMeeting = () => {
     const queryClient = useQueryClient();
     return useMutation({
@@ -175,19 +240,39 @@ export const useCreateMeeting = () => {
             if (!file) {
                 throw new Error('No file provided');
             }
-            const ticket = await requestBlobUpload(file);
-            await uploadFileToBlob(ticket.uploadUrl, file);
-            await apiClient.post('/meetings/import', {
-                title,
-                startedAt,
-                projectKey,
-                blobUrl: ticket.blobUrl,
-                originalFilename: file.name,
-                meetingId: ticket.meetingId,
-            });
+            let runtime: RuntimeConfig;
+            try {
+                runtime = await getRuntimeConfig();
+            } catch {
+                throw new Error('Unable to resolve ingest runtime configuration. Please refresh and try again.');
+            }
+            let blobUrl = '';
+            let meetingId = '';
+            if (runtime.ingestBackend === 'local') {
+                const ticket = await uploadFileToLocal(file);
+                assertUploadMetadata(ticket);
+                blobUrl = ticket.blobUrl;
+                meetingId = ticket.meetingId;
+            } else {
+                const ticket = await requestBlobUpload(file);
+                assertUploadMetadata(ticket);
+                await uploadFileToBlob(ticket.uploadUrl, file);
+                blobUrl = ticket.blobUrl;
+                meetingId = ticket.meetingId;
+            }
+            const {meetingId: queuedMeetingId} = await apiClient
+                .post<MeetingImportResponse>('/meetings/import', {
+                    title,
+                    startedAt,
+                    projectKey,
+                    blobUrl,
+                    originalFilename: file.name,
+                    meetingId,
+                })
+                .then((res) => res.data);
             // Return meeting data for optimistic update
             return {
-                id: ticket.meetingId,
+                id: queuedMeetingId || meetingId,
                 title,
                 startedAt,
                 status: 'queued' as const,
@@ -219,6 +304,7 @@ export const useCreateMeeting = () => {
             if (context?.previous) {
                 queryClient.setQueryData(queryKeys.meetings(), context.previous);
             }
+            resetRuntimeConfigCache();
         },
         onSettled: () => {
             // Always refetch after mutation settles to get real server state

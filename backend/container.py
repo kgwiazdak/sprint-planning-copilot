@@ -22,6 +22,7 @@ from backend.infrastructure.queue.azure_storage import (
 )
 from backend.infrastructure.queue.background import BackgroundMeetingImportQueue
 from backend.infrastructure.storage.blob import BlobStorageService
+from backend.infrastructure.storage.local import LocalFileStorageService
 from backend.infrastructure.telemetry.mlflow_adapter import MLflowTelemetryAdapter
 from backend.infrastructure.transcription.azure_conversation import (
     AzureConversationTranscriber,
@@ -31,6 +32,11 @@ from backend.infrastructure.transcription.azure_conversation import (
 from backend.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _ingest_backend() -> str:
+    backend = (get_settings().ingest.backend or "azure").strip().lower()
+    return "local" if backend == "local" else "azure"
 
 
 class MockTranscriber(TranscriptionPort):
@@ -92,7 +98,10 @@ def _default_mock_transcript() -> str:
 
 
 @lru_cache(maxsize=1)
-def get_blob_storage() -> BlobStorageService | None:
+def get_blob_storage() -> BlobStorageService | LocalFileStorageService | None:
+    if _ingest_backend() == "local":
+        root = Path(get_settings().ingest.local_storage_root) / "uploads"
+        return LocalFileStorageService(root_dir=str(root))
     cfg = get_settings().blob_storage
     if not cfg.container_name or not cfg.connection_string:
         return None
@@ -103,7 +112,10 @@ def get_blob_storage() -> BlobStorageService | None:
 
 
 @lru_cache(maxsize=1)
-def get_worker_blob_storage() -> BlobStorageService | None:
+def get_worker_blob_storage() -> BlobStorageService | LocalFileStorageService | None:
+    if _ingest_backend() == "local":
+        root = Path(get_settings().ingest.local_storage_root) / "voices"
+        return LocalFileStorageService(root_dir=str(root))
     cfg = get_settings().blob_storage
     if not cfg.container_workers_name or not cfg.connection_string:
         return None
@@ -148,14 +160,17 @@ def _build_intro_loader():
     if not storage:
         return None
     pattern = os.getenv("INTRO_AUDIO_PATTERN", "intro_*.*")
-    prefix = pattern.split("*", 1)[0]
-    container_prefix = f"{storage._container_client.url}/"
 
     def _blob_name(path: str) -> str | None:
         if not path:
             return None
-        if path.startswith(container_prefix):
-            return path[len(container_prefix):].split("?", 1)[0]
+        if path.startswith("local://"):
+            return path[len("local://"):].split("?", 1)[0]
+        container_client = getattr(storage, "_container_client", None)
+        if container_client:
+            container_prefix = f"{container_client.url}/"
+            if path.startswith(container_prefix):
+                return path[len(container_prefix):].split("?", 1)[0]
         if "://" not in path:
             return path
         return None
@@ -183,7 +198,7 @@ def _build_intro_loader():
                 continue
             role = VoiceSamplesSyncService._display_name_from_blob(filename) or AzureConversationTranscriber._role_from_filename(Path(filename))
             try:
-                source_url = storage.build_blob_url(blob_name)
+                source_url = storage.build_blob_url(blob_name)  # type: ignore[attr-defined]
             except Exception:
                 source_url = blob_name
             clips.append(IntroClip(role=role, content=payload, source=source_url))
@@ -245,6 +260,9 @@ def get_extract_use_case() -> ExtractMeetingUseCase:
 @lru_cache(maxsize=1)
 def get_meeting_queue():
     settings = get_settings()
+    if _ingest_backend() == "local":
+        use_case = get_extract_use_case()
+        return BackgroundMeetingImportQueue(use_case.process_job)
     profile = getattr(settings, "profile", "prod")
     # In dev we prefer the in-process background queue unless explicitly forced to Azure.
     azure_queue_forced = os.getenv("ENABLE_AZURE_QUEUE", "").lower() in {"1", "true", "yes", "on"}
@@ -278,6 +296,8 @@ def get_meeting_queue():
 @lru_cache(maxsize=1)
 def get_meeting_queue_worker() -> AzureQueueWorker | None:
     settings = get_settings()
+    if _ingest_backend() == "local":
+        return None
     profile = getattr(settings, "profile", "prod")
     azure_queue_forced = os.getenv("ENABLE_AZURE_QUEUE", "").lower() in {"1", "true", "yes", "on"}
     if profile == "dev" and not azure_queue_forced:
@@ -346,6 +366,9 @@ def get_mock_audio_path() -> Path | None:
     target = local_dir / filename
     if target.exists():
         return target
+    if _ingest_backend() == "local":
+        logger.warning("Mock audio enabled in local ingest mode, but local file '%s' does not exist.", target)
+        return None
     storage = get_blob_storage()
     if storage is None:
         logger.warning("Mock audio enabled but blob storage is not configured.")

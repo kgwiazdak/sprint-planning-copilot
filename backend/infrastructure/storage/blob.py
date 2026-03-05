@@ -133,6 +133,10 @@ class BlobStorageService:
         blob_name = self._extract_blob_name(blob_url)
         return await asyncio.to_thread(self._download_bytes, blob_name)
 
+    async def delete_blob(self, blob_url: str) -> bool:
+        blob_name = self._extract_blob_name(blob_url)
+        return await asyncio.to_thread(self._delete_blob_by_name, blob_name)
+
     def download_blob_by_name_sync(self, blob_name: str) -> bytes:
         return self._download_bytes(blob_name)
 
@@ -152,6 +156,14 @@ class BlobStorageService:
             return stream.readall()
         except AzureError as exc:
             raise BlobStorageUploadError(f"Downloading blob '{blob_name}' failed") from exc
+
+    def _delete_blob_by_name(self, blob_name: str) -> bool:
+        blob_client = self._container_client.get_blob_client(blob=blob_name)
+        try:
+            blob_client.delete_blob(delete_snapshots="include")
+            return True
+        except AzureError:
+            return False
 
     @staticmethod
     def _build_blob_name(meeting_id: str, original_filename: str) -> str:

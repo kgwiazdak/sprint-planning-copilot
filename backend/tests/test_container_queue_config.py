@@ -16,8 +16,13 @@ def _reset(monkeypatch: pytest.MonkeyPatch) -> None:
             "AZURE_STORAGE_QUEUE_NAME",
             "AZURE_STORAGE_QUEUE_CONNECTION_STRING",
             "AZURE_STORAGE_CONNECTION_STRING",
+            "ENABLE_AZURE_QUEUE",
+            "APP_PROFILE",
+            "INGEST_BACKEND",
     ):
         monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("APP_PROFILE", "prod")
+    monkeypatch.setenv("INGEST_BACKEND", "azure")
     container.get_settings.cache_clear()
     container.get_meeting_queue.cache_clear()
     container.get_meeting_queue_worker.cache_clear()
@@ -61,3 +66,31 @@ def test_meeting_queue_worker_instantiated_with_valid_env(monkeypatch: pytest.Mo
 
     assert worker is not None
     assert getattr(worker, "_queue_client") is fake_client
+
+
+def test_meeting_queue_worker_none_when_ingest_backend_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    _reset(monkeypatch)
+    monkeypatch.setattr(container, "get_extract_use_case", lambda: DummyUseCase())
+    monkeypatch.setenv("INGEST_BACKEND", "local")
+    monkeypatch.setenv("AZURE_STORAGE_QUEUE_NAME", "ingestion")
+    monkeypatch.setenv(
+        "AZURE_STORAGE_CONNECTION_STRING",
+        "DefaultEndpointsProtocol=https;"
+        "AccountName=testaccount;"
+        "AccountKey=dGVzdA==;"
+        "EndpointSuffix=core.windows.net",
+    )
+
+    worker = container.get_meeting_queue_worker()
+
+    assert worker is None
+
+
+def test_meeting_queue_local_backend_returns_background_queue(monkeypatch: pytest.MonkeyPatch) -> None:
+    _reset(monkeypatch)
+    monkeypatch.setattr(container, "get_extract_use_case", lambda: DummyUseCase())
+    monkeypatch.setenv("INGEST_BACKEND", "local")
+
+    queue = container.get_meeting_queue()
+
+    assert type(queue).__name__ == "BackgroundMeetingImportQueue"

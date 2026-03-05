@@ -15,6 +15,7 @@ load_dotenv(dotenv_path=".env")
 from backend.container import get_meeting_queue_worker
 from backend.infrastructure.telemetry.langsmith_setup import configure_langsmith
 from backend.presentation.http.ui_router import public_router, router as ui_router
+from backend.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,16 @@ app = create_app()
 
 @app.on_event("startup")
 async def _start_queue_worker() -> None:
+    settings = get_settings()
+    ingest_backend = (settings.ingest.backend or "azure").strip().lower()
+    ingest_backend = "local" if ingest_backend == "local" else "azure"
+    logger.info(
+        "Ingest runtime configured: backend=%s, local_storage_root=%s, azure_blob_configured=%s, azure_queue_configured=%s",
+        ingest_backend,
+        settings.ingest.local_storage_root,
+        bool(settings.blob_storage.connection_string and settings.blob_storage.container_name),
+        bool(settings.queue.connection_string and settings.queue.queue_name),
+    )
     try:
         worker = get_meeting_queue_worker()
     except Exception:  # pragma: no cover - defensive

@@ -23,13 +23,14 @@ from backend.domain.status import MeetingStatus
 from backend.infrastructure.jira import JiraClientError
 from backend.infrastructure.persistence.sqlite import TASK_STATUSES
 from backend.infrastructure.storage.blob import BlobStorageConfigError, BlobStorageService
+from backend.infrastructure.storage.local import LocalStorageError
 from backend.presentation.http.dependencies import (
-    blob_storage_service,
     data_repository,
     jira_client as jira_dependency,
     meeting_queue,
+    optional_blob_storage_service,
+    optional_worker_blob_storage_service,
     submit_import_command,
-    worker_blob_storage_service,
 )
 from backend.presentation.http.security import AuthenticatedUser, require_authenticated_user
 from backend.settings import get_settings
@@ -190,6 +191,12 @@ class BlobUploadResponse(BaseModel):
     meetingId: str
 
 
+class LocalUploadResponse(BaseModel):
+    blobUrl: str
+    blobPath: str
+    meetingId: str
+
+
 class MeetingImportRequest(BaseModel):
     title: str = Field(..., min_length=3)
     startedAt: str
@@ -212,8 +219,42 @@ class QueueHealthResponse(BaseModel):
     stalled: bool
 
 
+class RuntimeConfigResponse(BaseModel):
+    ingestBackend: Literal["azure", "local"]
+
+
+class IngestHealthResponse(BaseModel):
+    ingestBackend: Literal["azure", "local"]
+    localUploadEnabled: bool
+    sasUploadEnabled: bool
+    azureQueueEnabled: bool
+
+
 def _repo(repo: MeetingsRepositoryPort = Depends(data_repository)) -> MeetingsRepositoryPort:
     return repo
+
+
+async def _delete_meeting_source_asset(source_url: str | None, storage: Any) -> None:
+    if not source_url:
+        return
+    if source_url.startswith("local://"):
+        root = Path(get_settings().ingest.local_storage_root) / "uploads"
+        rel = source_url[len("local://"):].replace("\\", "/").lstrip("/")
+        if not rel:
+            return
+        target = root / rel
+        if target.exists():
+            try:
+                target.unlink()
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("Failed to delete local source file '%s': %s", target, exc)
+        return
+    if storage is None or not hasattr(storage, "delete_blob"):
+        return
+    try:
+        await storage.delete_blob(source_url)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Failed to delete source blob '%s': %s", source_url, exc)
 
 
 def _count_meeting_statuses(meetings: list[dict[str, Any]]) -> tuple[int, int]:
@@ -262,6 +303,25 @@ def queue_status(
     )
 
 
+@router.get("/runtime/config", response_model=RuntimeConfigResponse)
+def runtime_config(_user: CurrentUser):
+    backend = (get_settings().ingest.backend or "azure").strip().lower()
+    ingest_backend = "local" if backend == "local" else "azure"
+    return RuntimeConfigResponse(ingestBackend=ingest_backend)
+
+
+@router.get("/ingest/health", response_model=IngestHealthResponse)
+def ingest_health(_user: CurrentUser, queue_port: MeetingImportQueuePort = Depends(meeting_queue)):
+    backend = (get_settings().ingest.backend or "azure").strip().lower()
+    ingest_backend: Literal["azure", "local"] = "local" if backend == "local" else "azure"
+    return IngestHealthResponse(
+        ingestBackend=ingest_backend,
+        localUploadEnabled=ingest_backend == "local",
+        sasUploadEnabled=ingest_backend == "azure",
+        azureQueueEnabled=hasattr(queue_port, "queue_client"),
+    )
+
+
 @router.get("/meetings")
 def list_meetings(user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
     return repo.list_meetings(owner_id=user.subject)
@@ -304,10 +364,18 @@ def update_meeting(
 
 
 @router.delete("/meetings/{meeting_id}", status_code=204)
-def delete_meeting(meeting_id: str, user: CurrentUser, repo: MeetingsRepositoryPort = Depends(_repo)):
+async def delete_meeting(
+        meeting_id: str,
+        user: CurrentUser,
+        repo: MeetingsRepositoryPort = Depends(_repo),
+        storage: Any = Depends(optional_blob_storage_service),
+):
+    meeting = repo.get_meeting(meeting_id, owner_id=user.subject)
+    source_url = meeting.get("sourceUrl") if meeting else None
     deleted = repo.delete_meeting(meeting_id, owner_id=user.subject)
     if not deleted:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    await _delete_meeting_source_asset(source_url, storage)
 
 
 @router.get("/meetings/{meeting_id}/tasks")
@@ -418,8 +486,10 @@ async def upload_voice_sample(
         file: UploadFile = File(...),
         userId: str | None = Form(default=None),
         repo: MeetingsRepositoryPort = Depends(_repo),
-        worker_storage: BlobStorageService = Depends(worker_blob_storage_service),
+        worker_storage: Any = Depends(optional_worker_blob_storage_service),
 ):
+    if worker_storage is None:
+        raise HTTPException(status_code=503, detail="Worker storage is not configured.")
     payload = await file.read()
     if not payload:
         raise HTTPException(status_code=400, detail="Audio file is empty.")
@@ -468,8 +538,13 @@ def download_mock_audio():
 def create_blob_upload(
         payload: BlobUploadRequest,
         _user: CurrentUser,
-        storage: BlobStorageService = Depends(blob_storage_service),
+        storage: Any = Depends(optional_blob_storage_service),
 ):
+    backend = (get_settings().ingest.backend or "azure").strip().lower()
+    if backend != "azure":
+        raise HTTPException(status_code=400, detail="SAS upload is available only when INGEST_BACKEND=azure.")
+    if not isinstance(storage, BlobStorageService):
+        raise HTTPException(status_code=503, detail="Azure blob storage is not configured.")
     meeting_id = payload.meetingId or str(uuid.uuid4())
     try:
         token = storage.generate_upload_token(
@@ -485,6 +560,44 @@ def create_blob_upload(
         blobUrl=token.blob_url,
         blobPath=token.blob_path,
         expiresAt=token.expires_at,
+        meetingId=meeting_id,
+    )
+
+
+@router.post("/uploads/local", response_model=LocalUploadResponse)
+async def create_local_upload(
+        _user: CurrentUser,
+        file: UploadFile = File(...),
+        meetingId: str | None = Form(default=None),
+        storage: Any = Depends(optional_blob_storage_service),
+):
+    backend = (get_settings().ingest.backend or "azure").strip().lower()
+    if backend != "local":
+        raise HTTPException(status_code=400, detail="Local upload is available only when INGEST_BACKEND=local.")
+    if not hasattr(storage, "upload_blob"):
+        raise HTTPException(status_code=503, detail="Local storage is not configured.")
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="Audio file is empty.")
+
+    meeting_id = (meetingId or str(uuid.uuid4())).strip()
+    if not re.match(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", meeting_id):
+        raise HTTPException(status_code=400, detail="meetingId has an invalid format.")
+    safe_name = Path(file.filename or "uploaded_file").name.replace(" ", "_").strip()
+    if not safe_name or safe_name in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Uploaded filename is invalid.")
+    blob_path = f"{meeting_id}/{safe_name}"
+    try:
+        blob_url = await storage.upload_blob(
+            blob_name=blob_path,
+            content=payload,
+            content_type=file.content_type or "application/octet-stream",
+        )
+    except (LocalStorageError, OSError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return LocalUploadResponse(
+        blobUrl=blob_url,
+        blobPath=blob_path,
         meetingId=meeting_id,
     )
 

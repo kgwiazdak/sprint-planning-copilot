@@ -532,6 +532,7 @@ class CosmosMeetingsRepository(MeetingsRepositoryPort):
             "draftTaskCount": draft_count,
             "transcript": item.get("transcript"),
             "projectKey": item.get("projectKey"),
+            "sourceUrl": item.get("sourceUrl"),
         }
 
     def _serialize_task(self, item: dict[str, Any], users: dict[str, dict[str, Any]]) -> dict[str, Any]:

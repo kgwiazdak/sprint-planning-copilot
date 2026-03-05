@@ -73,6 +73,8 @@ class RAGConfig:
     confluence_live_enabled: bool = os.getenv("RAG_CONFLUENCE_LIVE_ENABLED", "1").lower() in {"1", "true", "yes", "on"}
     confluence_live_pages_limit: int = int(os.getenv("RAG_CONFLUENCE_LIVE_PAGES_LIMIT", "20"))
     confluence_live_spaces_limit: int = int(os.getenv("RAG_CONFLUENCE_LIVE_SPACES_LIMIT", "5"))
+    confluence_mock_enabled: bool = os.getenv("RAG_CONFLUENCE_MOCK_ENABLED", "1").lower() in {"1", "true", "yes", "on"}
+    confluence_mock_space_key: str = os.getenv("RAG_CONFLUENCE_MOCK_SPACE_KEY", "ENG")
     confluence_live_space_keys: list[str] = field(
         default_factory=lambda: [x.strip() for x in (os.getenv("RAG_CONFLUENCE_SPACE_KEYS") or "").split(",") if x.strip()]
     )
@@ -590,11 +592,62 @@ class RAGEstimator:
             )
         return {"old_task_docs": docs, "fallback_average_points": self._average_history_points(history_rows)}
 
+    def _build_mock_confluence_docs(self, state: RAGPipelineState) -> list[tuple[str, dict[str, Any]]]:
+        if not self._config.confluence_mock_enabled:
+            return []
+        tasks = list(state.get("tasks") or [])
+        if not tasks:
+            return []
+        project_key = (state.get("project_key") or "SPR").strip() or "SPR"
+        space_key = (self._config.confluence_mock_space_key or "ENG").strip() or "ENG"
+        meeting_id = (state.get("meeting_id") or "draft").strip() or "draft"
+        transcript = str(state.get("transcript") or "")
+        transcript_excerpt = " ".join(transcript.split())[:450]
+
+        docs: list[tuple[str, dict[str, Any]]] = []
+        for idx, task in enumerate(tasks[:3], start=1):
+            title = f"{project_key} Delivery Notes - {task.summary[:64]}"
+            page_id = f"mock-{project_key.lower()}-{meeting_id[:8]}-{idx}"
+            webui = f"/wiki/spaces/{space_key}/pages/{100000+idx}/{urllib.parse.quote(title)}"
+            body = (
+                f"Page title: {title}\n"
+                f"Space: {space_key}\n"
+                f"Status: Approved for sprint execution\n\n"
+                f"Background:\n{task.description.strip()}\n\n"
+                f"Implementation guidance:\n"
+                f"- Align scope with sprint goal and stakeholder expectations.\n"
+                f"- Keep acceptance criteria measurable and demo-ready.\n"
+                f"- Capture risks and dependencies in Jira task description.\n\n"
+                f"Acceptance criteria template:\n"
+                f"1. Functional outcome is implemented and validated.\n"
+                f"2. Regression impact is assessed.\n"
+                f"3. Rollout and fallback are documented.\n\n"
+                f"Meeting excerpt:\n{transcript_excerpt}"
+            ).strip()
+            docs.append(
+                (
+                    f"{title}\n\n{body}",
+                    {
+                        "source": "confluence_live",
+                        "source_id": page_id,
+                        "title": title,
+                        "space_key": space_key,
+                        "story_points": None,
+                        "webui": webui,
+                        "mocked": True,
+                    },
+                )
+            )
+        return docs
+
     def _node_collect_confluence_data(self, state: RAGPipelineState) -> dict[str, Any]:
         live_docs = self._collect_confluence_docs_live(state.get("confluence_access_token"))
         if live_docs:
             return {"confluence_docs": live_docs}
-        return {"confluence_docs": self._seed_confluence_docs()}
+        seeded_docs = self._seed_confluence_docs()
+        if seeded_docs:
+            return {"confluence_docs": seeded_docs}
+        return {"confluence_docs": self._build_mock_confluence_docs(state)}
 
     def _node_collect_transcript_data(self, state: RAGPipelineState) -> dict[str, Any]:
         transcript = str(state.get("transcript") or "")

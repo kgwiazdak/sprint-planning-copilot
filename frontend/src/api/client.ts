@@ -26,10 +26,16 @@ apiClient.interceptors.request.use(async (config) => {
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
+        const detail = error?.response?.data?.detail;
         const message =
             error?.response?.data?.message ??
+            (typeof detail === 'string' ? detail : undefined) ??
             error?.message ??
             'Something went wrong';
+        if (error instanceof Error) {
+            error.message = message;
+            return Promise.reject(error);
+        }
         return Promise.reject(new Error(message));
     },
 );

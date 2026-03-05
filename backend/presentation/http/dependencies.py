@@ -19,7 +19,6 @@ from backend.container import (
 )
 from backend.domain.ports import MeetingImportQueuePort, MeetingsRepositoryPort
 from backend.infrastructure.jira import JiraClient
-from backend.infrastructure.storage.blob import BlobStorageService
 from backend.presentation.http.security import AuthenticatedUser, require_authenticated_user
 from backend.settings import get_settings
 
@@ -32,18 +31,26 @@ def data_repository() -> MeetingsRepositoryPort:
     return get_meetings_repository()
 
 
-def blob_storage_service() -> BlobStorageService:
+def blob_storage_service():
     storage = get_blob_storage()
     if storage is None:
         raise RuntimeError("Blob storage is not configured.")
     return storage
 
 
-def worker_blob_storage_service() -> BlobStorageService:
+def optional_blob_storage_service():
+    return get_blob_storage()
+
+
+def worker_blob_storage_service():
     storage = get_worker_blob_storage()
     if storage is None:
         raise RuntimeError("Worker blob storage is not configured.")
     return storage
+
+
+def optional_worker_blob_storage_service():
+    return get_worker_blob_storage()
 
 
 def meeting_queue() -> MeetingImportQueuePort:

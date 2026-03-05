@@ -113,8 +113,12 @@ class ExtractMeetingUseCase:
                 raise ExtractionError("blob_url is required.", status_code=400)
             if not self._blob_storage:
                 raise ExtractionError("Blob storage is not configured.", status_code=500)
-
-            payload = await self._blob_storage.download_blob(blob_url)
+            try:
+                payload = await self._blob_storage.download_blob(blob_url)
+            except Exception as exc:
+                message = str(exc).lower()
+                status = 404 if "not found" in message else 400
+                raise ExtractionError(f"Unable to read uploaded file: {exc}", status_code=status) from exc
             if not payload:
                 raise ExtractionError("Referenced blob is empty.", status_code=400)
 

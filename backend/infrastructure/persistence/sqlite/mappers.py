@@ -15,6 +15,7 @@ def serialize_meeting_row(meeting: Meeting, draft_count: int = 0) -> dict[str, A
         "status": meeting.status or "pending",
         "draftTaskCount": draft_count,
         "projectKey": meeting.project_key,
+        "sourceUrl": meeting.source_url,
     }
 
 

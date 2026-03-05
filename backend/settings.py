@@ -65,6 +65,11 @@ class QueueSettings(BaseModel):
     max_batch_size: int = 16
 
 
+class IngestSettings(BaseModel):
+    backend: str = "azure"
+    local_storage_root: str = "data/local_storage"
+
+
 class AzureADSettings(BaseModel):
     tenant_id: str | None = None
     client_id: str | None = None
@@ -123,6 +128,7 @@ class AppConfig(BaseModel):
     mock_audio: MockAudioSettings = MockAudioSettings()
     jira: JiraSettings = JiraSettings()
     queue: QueueSettings = QueueSettings()
+    ingest: IngestSettings = IngestSettings()
     azure_ad: AzureADSettings = AzureADSettings()
     atlassian_oauth: AtlassianOAuthSettings = AtlassianOAuthSettings()
     mcp: MCPSettings = MCPSettings()
@@ -189,6 +195,10 @@ class AppConfig(BaseModel):
                 visibility_timeout=int(os.getenv("MEETING_QUEUE_VISIBILITY_TIMEOUT", "300")),
                 poll_interval_seconds=float(os.getenv("MEETING_QUEUE_POLL_INTERVAL", "2.0")),
                 max_batch_size=int(os.getenv("MEETING_QUEUE_MAX_BATCH", "16")),
+            ),
+            ingest=IngestSettings(
+                backend=os.getenv("INGEST_BACKEND", "azure").lower(),
+                local_storage_root=os.getenv("LOCAL_STORAGE_ROOT", "data/local_storage"),
             ),
             azure_ad=AzureADSettings(
                 tenant_id=os.getenv("AZURE_AD_TENANT_ID"),

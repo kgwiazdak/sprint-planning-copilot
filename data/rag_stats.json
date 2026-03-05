@@ -9,44 +9,53 @@
       "estimated_points": 5,
       "contexts": [
         {
-          "score": 0.3334429644276751,
-          "metadata": {
-            "source": "transcript",
-            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:0",
-            "project_key": "SCRUM",
-            "story_points": null
-          },
-          "preview": "Adrian Puchacki: Morning team, let's keep this simple. We need four tasks and clear owners.\nWaldemar Walasik: Morning. Training still takes four hours on Azure, even after the ingest refactor.\nWojciech Puczyk: I can parallelize preprocessing with Dask. Nice and clear: that would be my task.\nAdrian P"
-        },
-        {
-          "score": 0.2839538184148373,
-          "metadata": {
-            "source": "transcript",
-            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:3",
-            "project_key": "SCRUM",
-            "story_points": null
-          },
-          "preview": "edeploy for 3 points, and drift alerting for 3 points.\nAdrian Puchacki: And I own the release brief at 1 point. Four tasks total, owners clear.\nWojciech Puczyk: Timeline: finish by Thursday, quick demo Friday. Let's keep it simple.\nWaldemar Walasik: No extra tasks hiding here. Just these four.\nAdria"
-        },
-        {
-          "score": 0.2727723627949905,
+          "score": 0.6208193510729726,
           "metadata": {
             "source": "history",
-            "source_id": "9fedb333-3609-4e71-b411-848a2f9e8f12",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source_id": "53105eaa-0e12-40a0-815c-5d79ef77b6ff",
+            "title": "Dask parallelization",
+            "story_points": 5
           },
-          "preview": "Release brief and checklist\n\nCreate a release readiness checklist and brief for stakeholders."
+          "preview": "Dask parallelization\n\nImplement Dask for parallel processing to optimize the workflow.\nContext references:\n- SCRUM Delivery Notes - Dask parallelization Page title: SCRUM Delivery Notes - Dask parallelization Space: ENG Status: Approved for sprint e\n- SCRUM Delivery Notes - Registry update and redep"
         },
         {
-          "score": 0.2703102529506447,
+          "score": 0.5829915557523537,
           "metadata": {
-            "source": "transcript",
-            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:2",
-            "project_key": "SCRUM",
-            "story_points": null
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-1",
+            "title": "SCRUM Delivery Notes - Dask parallelization",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100001/SCRUM%20Delivery%20Notes%20-%20Dask%20parallelization",
+            "mocked": true
           },
-          "preview": "udes Slack notification and MLflow log.\nAdrian Puchacki: Task three: Waldemar, drift detection and alerting, 3 points.\nWojciech Puczyk: Do we need a release brief for stakeholders?\nAdrian Puchacki: Yes, I'll own the release-readiness checklist and brief. Very small.\nWaldemar Walasik: How many points"
+          "preview": "SCRUM Delivery Notes - Dask parallelization\n\nPage title: SCRUM Delivery Notes - Dask parallelization\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nImplement Dask for parallel processing to optimize the workflow.\n\nImplementation guidance:\n- Align scope with sprint goal and stakeholder"
+        },
+        {
+          "score": 0.42921427146554003,
+          "metadata": {
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-2",
+            "title": "SCRUM Delivery Notes - Registry update and redeploy",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100002/SCRUM%20Delivery%20Notes%20-%20Registry%20update%20and%20redeploy",
+            "mocked": true
+          },
+          "preview": "SCRUM Delivery Notes - Registry update and redeploy\n\nPage title: SCRUM Delivery Notes - Registry update and redeploy\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nUpdate the model registry and redeploy via MLflow.\n\nImplementation guidance:\n- Align scope with sprint goal and stakehold"
+        },
+        {
+          "score": 0.41810295726403107,
+          "metadata": {
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-3",
+            "title": "SCRUM Delivery Notes - Drift detection and alerting",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100003/SCRUM%20Delivery%20Notes%20-%20Drift%20detection%20and%20alerting",
+            "mocked": true
+          },
+          "preview": "SCRUM Delivery Notes - Drift detection and alerting\n\nPage title: SCRUM Delivery Notes - Drift detection and alerting\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nImplement drift detection with alerts for accuracy drops over three percent.\n\nImplementation guidance:\n- Align scope with"
         }
       ]
     },
@@ -55,44 +64,47 @@
       "estimated_points": 3,
       "contexts": [
         {
-          "score": 0.46291004988627577,
+          "score": 0.5494850989665467,
           "metadata": {
-            "source": "history",
-            "source_id": "6731b2cf-74f6-47f8-8db1-e200c79ec947",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-2",
+            "title": "SCRUM Delivery Notes - Registry update and redeploy",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100002/SCRUM%20Delivery%20Notes%20-%20Registry%20update%20and%20redeploy",
+            "mocked": true
           },
-          "preview": "Release brief and checklist\n\nPrepare the release-readiness checklist and brief for stakeholders."
+          "preview": "SCRUM Delivery Notes - Registry update and redeploy\n\nPage title: SCRUM Delivery Notes - Registry update and redeploy\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nUpdate the model registry and redeploy via MLflow.\n\nImplementation guidance:\n- Align scope with sprint goal and stakehold"
         },
         {
-          "score": 0.46291004988627577,
+          "score": 0.42472894932495525,
           "metadata": {
             "source": "history",
-            "source_id": "62c60e06-54dc-4530-93a3-c960bbf95a63",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source_id": "53105eaa-0e12-40a0-815c-5d79ef77b6ff",
+            "title": "Dask parallelization",
+            "story_points": 5
           },
-          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+          "preview": "Dask parallelization\n\nImplement Dask for parallel processing to optimize the workflow.\nContext references:\n- SCRUM Delivery Notes - Dask parallelization Page title: SCRUM Delivery Notes - Dask parallelization Space: ENG Status: Approved for sprint e\n- SCRUM Delivery Notes - Registry update and redep"
         },
         {
-          "score": 0.46291004988627577,
+          "score": 0.4194472830574392,
           "metadata": {
-            "source": "history",
-            "source_id": "7e1eb6f4-db19-4beb-976a-7dad96b925ce",
-            "title": "Release brief and checklist",
-            "story_points": 3
+            "source": "transcript",
+            "source_id": "42fe6f23-329c-4c90-bf24-260d37291243:3",
+            "project_key": "SCRUM",
+            "story_points": null
           },
-          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+          "preview": "edeploy for 3 points, and drift alerting for 3 points.\nAdrian Puchacki: And I own the release brief at 1 point. Four tasks total, owners clear.\nWojciech Puczyk: Timeline: finish by Thursday, quick demo Friday. Let's keep it simple.\nWaldemar Walasik: No extra tasks hiding here. Just these four.\nAdria"
         },
         {
-          "score": 0.4285714285714286,
+          "score": 0.37871217793984846,
           "metadata": {
-            "source": "history",
-            "source_id": "9fedb333-3609-4e71-b411-848a2f9e8f12",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source": "transcript",
+            "source_id": "42fe6f23-329c-4c90-bf24-260d37291243:1",
+            "project_key": "SCRUM",
+            "story_points": null
           },
-          "preview": "Release brief and checklist\n\nCreate a release readiness checklist and brief for stakeholders."
+          "preview": "e model registry and redeploy via MLflow. That's my task.\nAdrian Puchacki: How many points do you want for the registry and redeploy, Waldemar?\nWaldemar Walasik: Call it 3 points. Small changes and smoke tests.\nAdrian Puchacki: Good. Task two: Waldemar, registry update plus redeploy, 3 points.\nAdria"
         }
       ]
     },
@@ -101,20 +113,23 @@
       "estimated_points": 3,
       "contexts": [
         {
-          "score": 0.6943650748294137,
+          "score": 0.6220695572602648,
           "metadata": {
-            "source": "history",
-            "source_id": "81b8fca9-256c-41d4-887c-2a767d92caa5",
-            "title": "Drift detection and alerting",
-            "story_points": 5
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-3",
+            "title": "SCRUM Delivery Notes - Drift detection and alerting",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100003/SCRUM%20Delivery%20Notes%20-%20Drift%20detection%20and%20alerting",
+            "mocked": true
           },
-          "preview": "Drift detection and alerting\n\nImplement drift detection and alerting with Slack notification and ML flow log."
+          "preview": "SCRUM Delivery Notes - Drift detection and alerting\n\nPage title: SCRUM Delivery Notes - Drift detection and alerting\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nImplement drift detection with alerts for accuracy drops over three percent.\n\nImplementation guidance:\n- Align scope with"
         },
         {
           "score": 0.5268375041467508,
           "metadata": {
             "source": "transcript",
-            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:1",
+            "source_id": "42fe6f23-329c-4c90-bf24-260d37291243:1",
             "project_key": "SCRUM",
             "story_points": null
           },
@@ -124,21 +139,24 @@
           "score": 0.46147910349544874,
           "metadata": {
             "source": "transcript",
-            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:2",
+            "source_id": "42fe6f23-329c-4c90-bf24-260d37291243:2",
             "project_key": "SCRUM",
             "story_points": null
           },
           "preview": "udes Slack notification and MLflow log.\nAdrian Puchacki: Task three: Waldemar, drift detection and alerting, 3 points.\nWojciech Puczyk: Do we need a release brief for stakeholders?\nAdrian Puchacki: Yes, I'll own the release-readiness checklist and brief. Very small.\nWaldemar Walasik: How many points"
         },
         {
-          "score": 0.4458602343790136,
+          "score": 0.4594814916240645,
           "metadata": {
-            "source": "transcript",
-            "source_id": "5299c05b-1376-45c9-9a91-04927bb118ab:3",
-            "project_key": "SCRUM",
-            "story_points": null
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-2",
+            "title": "SCRUM Delivery Notes - Registry update and redeploy",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100002/SCRUM%20Delivery%20Notes%20-%20Registry%20update%20and%20redeploy",
+            "mocked": true
           },
-          "preview": "edeploy for 3 points, and drift alerting for 3 points.\nAdrian Puchacki: And I own the release brief at 1 point. Four tasks total, owners clear.\nWojciech Puczyk: Timeline: finish by Thursday, quick demo Friday. Let's keep it simple.\nWaldemar Walasik: No extra tasks hiding here. Just these four.\nAdria"
+          "preview": "SCRUM Delivery Notes - Registry update and redeploy\n\nPage title: SCRUM Delivery Notes - Registry update and redeploy\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nUpdate the model registry and redeploy via MLflow.\n\nImplementation guidance:\n- Align scope with sprint goal and stakehold"
         }
       ]
     },
@@ -147,54 +165,63 @@
       "estimated_points": 1,
       "contexts": [
         {
-          "score": 0.9733285267845755,
+          "score": 0.51641261488739,
           "metadata": {
-            "source": "history",
-            "source_id": "6731b2cf-74f6-47f8-8db1-e200c79ec947",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-2",
+            "title": "SCRUM Delivery Notes - Registry update and redeploy",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100002/SCRUM%20Delivery%20Notes%20-%20Registry%20update%20and%20redeploy",
+            "mocked": true
           },
-          "preview": "Release brief and checklist\n\nPrepare the release-readiness checklist and brief for stakeholders."
+          "preview": "SCRUM Delivery Notes - Registry update and redeploy\n\nPage title: SCRUM Delivery Notes - Registry update and redeploy\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nUpdate the model registry and redeploy via MLflow.\n\nImplementation guidance:\n- Align scope with sprint goal and stakehold"
         },
         {
-          "score": 0.9192547197409879,
+          "score": 0.4510067276611588,
           "metadata": {
-            "source": "history",
-            "source_id": "62c60e06-54dc-4530-93a3-c960bbf95a63",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source": "transcript",
+            "source_id": "42fe6f23-329c-4c90-bf24-260d37291243:2",
+            "project_key": "SCRUM",
+            "story_points": null
           },
-          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+          "preview": "udes Slack notification and MLflow log.\nAdrian Puchacki: Task three: Waldemar, drift detection and alerting, 3 points.\nWojciech Puczyk: Do we need a release brief for stakeholders?\nAdrian Puchacki: Yes, I'll own the release-readiness checklist and brief. Very small.\nWaldemar Walasik: How many points"
         },
         {
-          "score": 0.9192547197409879,
+          "score": 0.4458247853442226,
           "metadata": {
-            "source": "history",
-            "source_id": "7e1eb6f4-db19-4beb-976a-7dad96b925ce",
-            "title": "Release brief and checklist",
-            "story_points": 3
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-1",
+            "title": "SCRUM Delivery Notes - Dask parallelization",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100001/SCRUM%20Delivery%20Notes%20-%20Dask%20parallelization",
+            "mocked": true
           },
-          "preview": "Release brief and checklist\n\nCreate a release-readiness checklist and brief for stakeholders."
+          "preview": "SCRUM Delivery Notes - Dask parallelization\n\nPage title: SCRUM Delivery Notes - Dask parallelization\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nImplement Dask for parallel processing to optimize the workflow.\n\nImplementation guidance:\n- Align scope with sprint goal and stakeholder"
         },
         {
-          "score": 0.8510644963469902,
+          "score": 0.44336076731176444,
           "metadata": {
-            "source": "history",
-            "source_id": "9fedb333-3609-4e71-b411-848a2f9e8f12",
-            "title": "Release brief and checklist",
-            "story_points": 1
+            "source": "confluence_live",
+            "source_id": "mock-scrum-42fe6f23-3",
+            "title": "SCRUM Delivery Notes - Drift detection and alerting",
+            "space_key": "ENG",
+            "story_points": null,
+            "webui": "/wiki/spaces/ENG/pages/100003/SCRUM%20Delivery%20Notes%20-%20Drift%20detection%20and%20alerting",
+            "mocked": true
           },
-          "preview": "Release brief and checklist\n\nCreate a release readiness checklist and brief for stakeholders."
+          "preview": "SCRUM Delivery Notes - Drift detection and alerting\n\nPage title: SCRUM Delivery Notes - Drift detection and alerting\nSpace: ENG\nStatus: Approved for sprint execution\n\nBackground:\nImplement drift detection with alerts for accuracy drops over three percent.\n\nImplementation guidance:\n- Align scope with"
         }
       ]
     }
   ],
   "top_k": 8,
   "rerank_top_k": 4,
-  "seeded_confluence": 0,
-  "ingested_history": 5,
+  "seeded_confluence": 3,
+  "ingested_history": 1,
   "ingested_transcript_chunks": 4,
-  "latency_ms_retrieval": 5025.258110006689,
-  "meeting_id": "5299c05b-1376-45c9-9a91-04927bb118ab",
+  "latency_ms_retrieval": 4185.492392000015,
+  "meeting_id": "42fe6f23-329c-4c90-bf24-260d37291243",
   "project_key": "SCRUM"
 }
